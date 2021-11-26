@@ -1,0 +1,18 @@
+[package]
+name = "graphlib2"
+version = "0.1.0"
+edition = "2018"
+
+[lib]
+name = "graphlib2"
+crate-type = ["cdylib"]
+
+[dependencies.pyo3]
+version = "0.15.1"
+features = ["extension-module", "abi3-py36"]
+
+[dependencies.pyo3-build-config]
+version = "0.15.1"
+
+[package.metadata.maturin]
+python-source = "python"

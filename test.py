@@ -1,4 +1,4 @@
-import graphlib2 as graphlib
+import graphlib as graphlib
 
 
 graph = {0: [1], 1: [2], 2: [3], 3: [4]}

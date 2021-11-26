@@ -1,17 +1,11 @@
 use std::collections::VecDeque;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fmt;
-use std::hash::Hash;
-use std::iter::FromIterator;
 
 use pyo3::create_exception;
 use pyo3::exceptions;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use pyo3::types::PyIterator;
-use pyo3::types::PyMapping;
 use pyo3::types::PyTuple;
 
 mod hashedany;
@@ -198,8 +192,8 @@ impl TopologicalSorter {
 
 #[pymethods]
 impl TopologicalSorter {
-    fn add(&mut self, node: HashedAny, predecessors: &PyTuple) -> PyResult<()> {
-        self.add_node(node, predecessors.extract()?)?;
+    fn add(&mut self, node: HashedAny, predecessors: Vec<HashedAny>) -> PyResult<()> {
+        self.add_node(node, predecessors)?;
         Ok(())
     }
     fn prepare(&mut self, py: Python) -> PyResult<()> {
@@ -273,13 +267,11 @@ impl TopologicalSorter {
                 "prepare() must be called first",
             ));
         }
-        let mut node: HashedAny;
         let done_db = |s: &mut Self, done_node: &HashedAny| {
             s.ready_nodes.push(done_node.o.clone())
         };
-        for obj in nodes {
-            node = HashedAny::extract(obj)?;
-            self.mark_node_as_done(&node, done_db)?;
+        for node in nodes {
+            self.mark_node_as_done(&node.extract()?, done_db)?;
         }
         Ok(())
     }
@@ -318,7 +310,7 @@ impl TopologicalSorter {
         }
         let ret = PyTuple::new(py, &self.ready_nodes);
         self.n_passed_out += self.ready_nodes.len();
-        self.ready_nodes = Vec::new();
+        self.ready_nodes.clear();
         Ok(ret)
     }
     fn static_order<'py>(&mut self, py: Python<'py>) -> PyResult<Vec<Py<PyAny>>> {
@@ -339,7 +331,6 @@ impl TopologicalSorter {
         }
         // let ret = PyTuple::new(py, &self.ready_nodes);
         self.n_passed_out += out.len();
-        self.ready_nodes = Vec::new();
         Ok(out)
     }
 }

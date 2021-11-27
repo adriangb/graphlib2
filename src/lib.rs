@@ -1,13 +1,13 @@
-use std::collections::VecDeque;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 
 use pyo3::create_exception;
-use pyo3::{Py, PyAny, Python};
 use pyo3::exceptions;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::types::PyTuple;
+use pyo3::{Py, PyAny, Python};
 
 mod hashedany;
 use crate::hashedany::HashedAny;
@@ -21,8 +21,7 @@ enum NodeState {
     Done,
 }
 
-
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct NodeInfo {
     parents: Vec<HashedAny>,
     children: Vec<HashedAny>,
@@ -41,8 +40,8 @@ impl Default for NodeInfo {
     }
 }
 
-#[pyclass(module = "graphlib2",subclass)]
-#[derive(Debug, Clone)]
+#[pyclass(module = "graphlib2", subclass)]
+#[derive(Clone)]
 struct TopologicalSorter {
     node2nodeinfo: HashMap<HashedAny, NodeInfo>,
     ready_nodes: Vec<HashedAny>,
@@ -73,6 +72,7 @@ impl TopologicalSorter {
         node: &HashedAny,
         done_cb: &mut impl FnMut(&mut Self, &HashedAny, &mut T),
         cb_data: &mut T,
+        py: Python,
     ) -> PyResult<()> {
         // Check that this node is ready to be marked as done and mark it
         // There is currently a remove and an insert here just to take ownership of the value
@@ -83,14 +83,14 @@ impl TopologicalSorter {
                 match v.state {
                     NodeState::Active => {
                         return Err(exceptions::PyValueError::new_err(format!(
-                            "node {:?} was not passed out (still not ready)",
-                            node
+                            "node {} was not passed out (still not ready)",
+                            node.0.as_ref(py).repr().unwrap().to_str().unwrap()
                         )))
                     }
                     NodeState::Done => {
                         return Err(exceptions::PyValueError::new_err(format!(
-                            "node {:?} was already marked as done",
-                            node
+                            "node {} was already marked as done",
+                            node.0.as_ref(py).repr().unwrap().to_str().unwrap()
                         )))
                     }
                     NodeState::Ready => v.state = NodeState::Done,
@@ -99,8 +99,8 @@ impl TopologicalSorter {
             }
             None => {
                 return Err(exceptions::PyValueError::new_err(format!(
-                    "node {:?} was not added using add()",
-                    node
+                    "node {} was not added using add()",
+                    node.0.as_ref(py).repr().unwrap().to_str().unwrap()
                 )))
             }
         };
@@ -156,11 +156,11 @@ impl TopologicalSorter {
                     // If this node is in the current stack, we have a cycle
                     if node2stackidx.contains_key(node) {
                         let start_idx = node2stackidx.get(node).unwrap();
-                        let mut res = Vec::with_capacity(stack.len()-*start_idx);
+                        let mut res = Vec::with_capacity(stack.len() - *start_idx);
                         for n in stack[*start_idx..].iter() {
-                            res.push(n.o.clone())
+                            res.push(n.0.clone())
                         }
-                        res.push(node.o.clone());
+                        res.push(node.0.clone());
                         return Some(res);
                     }
                 } else {
@@ -202,7 +202,9 @@ impl TopologicalSorter {
     }
     fn prepare(&mut self, py: Python) -> PyResult<()> {
         if self.prepared {
-            return Err(exceptions::PyValueError::new_err("cannot prepare() more than once"))
+            return Err(exceptions::PyValueError::new_err(
+                "cannot prepare() more than once",
+            ));
         }
         match self.find_cycle() {
             Some(cycle) => {
@@ -210,14 +212,11 @@ impl TopologicalSorter {
                 for item in &cycle {
                     items.push(item.as_ref(py).repr()?.to_str()?);
                 }
-                return Err(CycleError::new_err(
-                        (
-                            format!("nodes are in a cycle [{}]", items.join(", ")),
-                            cycle,
-                        )
-                    )
-                )
-            },
+                return Err(CycleError::new_err((
+                    format!("nodes are in a cycle [{}]", items.join(", ")),
+                    cycle,
+                )));
+            }
             None => (),
         }
         self.prepared = true;
@@ -265,17 +264,16 @@ impl TopologicalSorter {
     /// # Arguments
     ///
     /// * `node` - A node in the graph
-    fn done(&mut self, nodes: Vec<HashedAny>) -> PyResult<()> {
+    fn done(&mut self, nodes: Vec<HashedAny>, py: Python) -> PyResult<()> {
         if !self.prepared {
             return Err(exceptions::PyValueError::new_err(
                 "prepare() must be called first",
             ));
         }
-        let mut done_db = |s: &mut Self, done_node: &HashedAny, _: &mut ()| {
-            s.ready_nodes.push(done_node.clone())
-        };
+        let mut done_db =
+            |s: &mut Self, done_node: &HashedAny, _: &mut ()| s.ready_nodes.push(done_node.clone());
         for node in nodes {
-            self.mark_node_as_done(&node, &mut done_db, &mut ())?;
+            self.mark_node_as_done(&node, &mut done_db, &mut (), py)?;
         }
         Ok(())
     }
@@ -312,7 +310,7 @@ impl TopologicalSorter {
                 "prepare() must be called first",
             ));
         }
-        let ret = PyTuple::new(py, self.ready_nodes.iter().map(|node| node.o.clone()));
+        let ret = PyTuple::new(py, self.ready_nodes.iter().map(|node| node.0.clone()));
         self.n_passed_out += self.ready_nodes.len();
         self.ready_nodes.clear();
         Ok(ret)
@@ -326,10 +324,12 @@ impl TopologicalSorter {
             q.push_back(done_node.clone());
         };
         loop {
-            if queue.is_empty() { break }
+            if queue.is_empty() {
+                break;
+            }
             node = queue.pop_front().unwrap();
-            self.mark_node_as_done(&node, &mut done_cb, &mut queue)?;
-            out.push(node.o);
+            self.mark_node_as_done(&node, &mut done_cb, &mut queue, py)?;
+            out.push(node.0);
         }
         self.n_passed_out += out.len();
         Ok(out)

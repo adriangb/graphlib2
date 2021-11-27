@@ -9,5 +9,7 @@
 !/test.py
 !/bench.ipynb
 !/requirements-dev.txt
+!/.pre-commit-config.yaml
+
 
 __pycache__

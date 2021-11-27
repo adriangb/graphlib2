@@ -51,22 +51,6 @@ struct TopologicalSorter {
 }
 
 impl TopologicalSorter {
-    fn remove_node(&mut self, node: &HashedAny, to_remove: &mut Vec<HashedAny>) -> () {
-        let nodeinfo = match self.node2nodeinfo.remove(&node) {
-            Some(v) => v,
-            // This node was already removed
-            // This happens if parents and children are passed in the nodes argument
-            None => return,
-        };
-        // Find all parents and reduce their dependency count by one
-        let mut parent_info;
-        for parent in nodeinfo.parents {
-            parent_info = self.node2nodeinfo.get_mut(&parent).unwrap();
-            parent_info.npredecessors -= 1;
-        }
-        // Push all children onto the stack for removal
-        to_remove.extend(nodeinfo.children);
-    }
     fn mark_node_as_done<T>(
         &mut self,
         node: &HashedAny,
@@ -284,24 +268,6 @@ impl TopologicalSorter {
             ));
         }
         Ok(self.n_finished < self.n_passed_out || !self.ready_nodes.is_empty())
-    }
-    /// Removes nodes from the graph and cleans up newly created disconnected components
-    /// # Arguments
-    ///
-    /// * `nodes` - Nodes to be removed from the graph
-    fn remove(&mut self, nodes: &PyTuple) -> PyResult<()> {
-        let mut to_remove: Vec<HashedAny> = Vec::new();
-        for node in nodes {
-            self.remove_node(&HashedAny::extract(node)?, &mut to_remove);
-        }
-        let mut node: HashedAny;
-        loop {
-            node = match to_remove.pop() {
-                Some(v) => v,
-                None => return Ok(()),
-            };
-            self.remove_node(&node, &mut to_remove);
-        }
     }
     /// Returns all nodes with no dependencies
     fn get_ready<'py>(&mut self, py: Python<'py>) -> PyResult<&'py PyTuple> {

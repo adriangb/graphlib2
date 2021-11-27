@@ -6,10 +6,11 @@
 !/Cargo.lock
 !/pyproject.toml
 !/python
-!/test.py
+!/test_graphlib.py
 !/bench.ipynb
 !/requirements-dev.txt
 !/.pre-commit-config.yaml
+!/Makefile
 
 
 __pycache__

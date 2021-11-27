@@ -13,7 +13,7 @@ use pyo3::prelude::*;
 #[derive(Clone)]
 pub struct HashedAny {
     pub o: Py<PyAny>,
-    pub hash: isize,
+    hash: isize,
     is_equal_to_self: bool,
 }
 

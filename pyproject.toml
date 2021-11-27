@@ -11,3 +11,6 @@ build-backend = "maturin"
 sdist-include = ["Cargo.lock"]
 strip = true
 manylinux = "2014"
+
+[tool.isort]
+profile = "black"

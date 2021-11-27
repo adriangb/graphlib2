@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use pyo3::create_exception;
+use pyo3::{Py, PyAny, Python};
 use pyo3::exceptions;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -44,7 +45,7 @@ impl Default for NodeInfo {
 #[derive(Debug, Clone)]
 struct TopologicalSorter {
     node2nodeinfo: HashMap<HashedAny, NodeInfo>,
-    ready_nodes: Vec<Py<PyAny>>,
+    ready_nodes: Vec<HashedAny>,
     n_passed_out: usize,
     n_finished: usize,
     prepared: bool,
@@ -59,23 +60,26 @@ impl TopologicalSorter {
             None => return,
         };
         // Find all parents and reduce their dependency count by one
+        let mut parent_info;
         for parent in nodeinfo.parents {
-            self.node2nodeinfo.get_mut(&parent).unwrap().npredecessors += 1;
+            parent_info = self.node2nodeinfo.get_mut(&parent).unwrap();
+            parent_info.npredecessors -= 1;
         }
         // Push all children onto the stack for removal
         to_remove.extend(nodeinfo.children);
     }
-    fn mark_node_as_done(
+    fn mark_node_as_done<T>(
         &mut self,
         node: &HashedAny,
-        mut done_cb: impl FnMut(&mut Self, &HashedAny),
+        done_cb: &mut impl FnMut(&mut Self, &HashedAny, &mut T),
+        cb_data: &mut T,
     ) -> PyResult<()> {
         // Check that this node is ready to be marked as done and mark it
         // There is currently a remove and an insert here just to take ownership of the value
         // so that we can reference it while modifying other values
         // Maybe there's a better way?
-        let (key, nodeinfo) = match self.node2nodeinfo.remove_entry(node) {
-            Some((k, mut v)) => {
+        let parents = match self.node2nodeinfo.get_mut(node) {
+            Some(mut v) => {
                 match v.state {
                     NodeState::Active => {
                         return Err(exceptions::PyValueError::new_err(format!(
@@ -91,7 +95,7 @@ impl TopologicalSorter {
                     }
                     NodeState::Ready => v.state = NodeState::Done,
                 }
-                (k, v)
+                v.parents.clone()
             }
             None => {
                 return Err(exceptions::PyValueError::new_err(format!(
@@ -103,15 +107,15 @@ impl TopologicalSorter {
         self.n_finished += 1;
         // Find all parents and reduce their dependency count by one,
         // returning all parents w/o any further dependencies
-        for parent in &nodeinfo.parents {
-            let parent_info = self.node2nodeinfo.get_mut(&parent).unwrap();
+        let mut parent_info: &mut NodeInfo;
+        for parent in parents {
+            parent_info = self.node2nodeinfo.get_mut(&parent).unwrap();
             parent_info.npredecessors -= 1;
             if parent_info.npredecessors == 0 {
                 parent_info.state = NodeState::Ready;
-                done_cb(self, parent);
+                done_cb(self, &parent, cb_data);
             }
         }
-        self.node2nodeinfo.insert(key, nodeinfo);
         Ok(())
     }
 
@@ -219,7 +223,7 @@ impl TopologicalSorter {
         self.prepared = true;
         for (node, nodeinfo) in self.node2nodeinfo.iter_mut() {
             if nodeinfo.npredecessors == 0 {
-                self.ready_nodes.push(node.o.clone());
+                self.ready_nodes.push(node.clone());
                 nodeinfo.state = NodeState::Ready;
             }
         }
@@ -261,17 +265,17 @@ impl TopologicalSorter {
     /// # Arguments
     ///
     /// * `node` - A node in the graph
-    fn done(&mut self, nodes: &PyTuple) -> PyResult<()> {
+    fn done(&mut self, nodes: Vec<HashedAny>) -> PyResult<()> {
         if !self.prepared {
             return Err(exceptions::PyValueError::new_err(
                 "prepare() must be called first",
             ));
         }
-        let done_db = |s: &mut Self, done_node: &HashedAny| {
-            s.ready_nodes.push(done_node.o.clone())
+        let mut done_db = |s: &mut Self, done_node: &HashedAny, _: &mut ()| {
+            s.ready_nodes.push(done_node.clone())
         };
         for node in nodes {
-            self.mark_node_as_done(&node.extract()?, done_db)?;
+            self.mark_node_as_done(&node, &mut done_db, &mut ())?;
         }
         Ok(())
     }
@@ -308,7 +312,7 @@ impl TopologicalSorter {
                 "prepare() must be called first",
             ));
         }
-        let ret = PyTuple::new(py, &self.ready_nodes);
+        let ret = PyTuple::new(py, self.ready_nodes.iter().map(|node| node.o.clone()));
         self.n_passed_out += self.ready_nodes.len();
         self.ready_nodes.clear();
         Ok(ret)
@@ -316,20 +320,17 @@ impl TopologicalSorter {
     fn static_order<'py>(&mut self, py: Python<'py>) -> PyResult<Vec<Py<PyAny>>> {
         self.prepare(py)?;
         let mut out = Vec::new();
-        let mut queue = VecDeque::new();
-        for (node, nodeinfo) in self.node2nodeinfo.iter() {
-            if nodeinfo.npredecessors == 0 {
-                queue.push_back(node.clone());
-            }
-        }
-        while !queue.is_empty() {
-            let node = queue.pop_front().unwrap();
-            self.mark_node_as_done(&node, |_: &mut Self, done_node: &HashedAny| {
-                queue.push_back(done_node.clone());
-            })?;
+        let mut queue: VecDeque<HashedAny> = VecDeque::from(self.ready_nodes.clone());
+        let mut node: HashedAny;
+        let mut done_cb = |_: &mut Self, done_node: &HashedAny, q: &mut VecDeque<HashedAny>| {
+            q.push_back(done_node.clone());
+        };
+        loop {
+            if queue.is_empty() { break }
+            node = queue.pop_front().unwrap();
+            self.mark_node_as_done(&node, &mut done_cb, &mut queue)?;
             out.push(node.o);
         }
-        // let ret = PyTuple::new(py, &self.ready_nodes);
         self.n_passed_out += out.len();
         Ok(out)
     }

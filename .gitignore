@@ -8,3 +8,6 @@
 !/python
 !/test.py
 !/bench.ipynb
+!/requirements-dev.txt
+
+__pycache__

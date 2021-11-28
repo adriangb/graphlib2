@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 from typing import Any, Collection, Dict, Generator, Hashable, Iterable, Sequence, Set, TypeVar, Protocol
 
@@ -59,14 +61,13 @@ def assert_cycles(
     graph: Dict[T, Sequence[T]],
     cycles: Iterable[Sequence[T]],
 ):
-    ts = graphlib.TopologicalSorter[T]()
+    ts: graphlib.TopologicalSorter[T] = graphlib.TopologicalSorter()
     for node, pred in graph.items():
         ts.add(node, *pred)
     try:
         ts.prepare()
     except graphlib.CycleError as e:
-        msg, seq = e.args
-        assert str(seq) in msg
+        _, seq = e.args
         for cycle in cycles:
             if cycles_match(cycle, seq):
                 return
@@ -133,7 +134,7 @@ def test_node_repeated_in_dependencies():
     assert_expected_resolution({1: {2}, 3: {4}, 0: [2, 4, 4, 4, 4, 4]}, [(2, 4), (0, 1, 3)])
 
     # Test adding the same dependency multiple times
-    ts = graphlib.TopologicalSorter[int]()
+    ts: graphlib.TopologicalSorter[int] = graphlib.TopologicalSorter()
     ts.add(1, 2)
     ts.add(1, 2)
     ts.add(1, 2)
@@ -153,7 +154,7 @@ def test_graph_with_iterables():
 def test_add_dependencies_for_same_node_incrementally():
     graph = {1: {2, 3, 4, 5}}
     # Test same node multiple times
-    ts = graphlib.TopologicalSorter[int]()
+    ts: graphlib.TopologicalSorter[int] = graphlib.TopologicalSorter()
     for k, vs in graph.items():
         for v in vs:
             ts.add(k, v)
@@ -195,7 +196,7 @@ def test_cycle(
  
 
 def test_calls_before_prepare():
-    ts = graphlib.TopologicalSorter[int]()
+    ts: graphlib.TopologicalSorter[int] = graphlib.TopologicalSorter()
 
     with pytest.raises(ValueError, match=r"prepare\(\) must be called first"):
         ts.get_ready()
@@ -206,14 +207,14 @@ def test_calls_before_prepare():
 
 
 def test_prepare_multiple_times():
-    ts = graphlib.TopologicalSorter[Node]()
+    ts: graphlib.TopologicalSorter[Node] = graphlib.TopologicalSorter()
     ts.prepare()
     with pytest.raises(ValueError, match=r"cannot prepare\(\) more than once"):
         ts.prepare()
 
 
 def test_invalid_nodes_in_done():
-    ts = graphlib.TopologicalSorter[int]()
+    ts: graphlib.TopologicalSorter[int] = graphlib.TopologicalSorter()
     ts.add(1, 2, 3, 4)
     ts.add(2, 3, 4)
     ts.prepare()
@@ -225,7 +226,7 @@ def test_invalid_nodes_in_done():
         ts.done(24)
 
 def test_done():
-    ts = graphlib.TopologicalSorter[int]()
+    ts: graphlib.TopologicalSorter[int] = graphlib.TopologicalSorter()
     ts.add(1, 2, 3, 4)
     ts.add(2, 3)
     ts.prepare()
@@ -247,7 +248,7 @@ def test_done():
     assert not set(ts.get_ready())
 
 def test_is_active():
-    ts = graphlib.TopologicalSorter[int]()
+    ts: graphlib.TopologicalSorter[int] = graphlib.TopologicalSorter()
     ts.add(1, 2)
     ts.prepare()
 
@@ -263,7 +264,7 @@ def test_is_active():
 
 
 def test_not_hashable_nodes():
-    ts = graphlib.TopologicalSorter[Any]()
+    ts: graphlib.TopologicalSorter[Any] = graphlib.TopologicalSorter()
     with pytest.raises(TypeError):
         ts.add(dict(), 1)
     with pytest.raises(TypeError):
@@ -279,14 +280,14 @@ def test_order_of_insertion_does_not_matter_between_groups():
             ts.done(*nodes)
             yield set(nodes)
 
-    ts = graphlib.TopologicalSorter[int]()
+    ts: graphlib.TopologicalSorter[int] = graphlib.TopologicalSorter()
     ts.add(3, 2, 1)
     ts.add(1, 0)
     ts.add(4, 5)
     ts.add(6, 7)
     ts.add(4, 7)
 
-    ts2 = graphlib.TopologicalSorter[int]()
+    ts2: graphlib.TopologicalSorter[int] = graphlib.TopologicalSorter()
     ts2.add(1, 0)
     ts2.add(3, 2, 1)
     ts2.add(4, 7)
@@ -294,15 +295,6 @@ def test_order_of_insertion_does_not_matter_between_groups():
     ts2.add(4, 5)
 
     assert list(get_groups(ts)) == list(get_groups(ts2))
-
-
-def test_copy_static_order():
-    graph = {0: [1, 2], 1: [2], 2: [3]}
-    t1 = graphlib.TopologicalSorter(graph)
-    t2 = t1.copy()
-    r1 = t1.static_order()
-    r2 = t2.static_order()
-    assert r1 == r2
 
 
 if __name__ == "__main__":

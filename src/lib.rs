@@ -1,18 +1,39 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::fmt;
 
 use pyo3::create_exception;
 use pyo3::exceptions;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::types::PyTuple;
 use pyo3::{Py, PyAny, Python};
+use nohash_hasher::BuildNoHashHasher;
+
 
 mod hashedany;
 use crate::hashedany::HashedAny;
 
 create_exception!(graphlib2, CycleError, exceptions::PyValueError);
+
+
+fn hashed_node_to_str(node: &HashedAny) -> PyResult<String> {
+    Python::with_gil(|py| -> PyResult<String> {
+        Ok(node.0.as_ref(py).repr()?.to_str()?.to_string())
+    })
+}
+
+
+// Use the result of calling repr() on the Python object as the debug string value
+impl fmt::Debug for HashedAny {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", hashed_node_to_str(self).unwrap())
+    }
+}
+
+
 
 #[derive(Debug, Clone, Copy)]
 enum NodeState {
@@ -21,136 +42,137 @@ enum NodeState {
     Done,
 }
 
-#[derive(Clone)]
+
+#[derive(Clone,Debug)]
 struct NodeInfo {
-    parents: Vec<HashedAny>,
-    children: Vec<HashedAny>,
+    node: HashedAny,
     state: NodeState,
     npredecessors: usize,
 }
 
-impl Default for NodeInfo {
-    fn default() -> NodeInfo {
-        NodeInfo {
-            parents: Vec::new(),
-            children: Vec::new(),
-            state: NodeState::Active,
-            npredecessors: 0,
-        }
-    }
-}
 
-#[pyclass(module = "graphlib2", subclass)]
+#[pyclass(module = "graphlib2")]
 #[derive(Clone)]
 struct TopologicalSorter {
-    node2nodeinfo: HashMap<HashedAny, NodeInfo>,
-    ready_nodes: Vec<HashedAny>,
+    idx2nodeinfo: HashMap<usize, NodeInfo, BuildNoHashHasher<usize>>,
+    node2idx: HashMap<HashedAny, usize>,
+    parents: HashMap<usize, Vec<usize>, BuildNoHashHasher<usize>>,
+    children: HashMap<usize, Vec<usize>, BuildNoHashHasher<usize>>,
+    ready_nodes: VecDeque<usize>,
     n_passed_out: usize,
     n_finished: usize,
     prepared: bool,
-    // py_to_idx: HashMap<HashedAny, usize>,
+    node_idx_counter: usize,
 }
 
 impl TopologicalSorter {
-    fn mark_node_as_done<T>(
+    fn mark_node_as_done(
         &mut self,
-        node: &HashedAny,
-        done_cb: &mut impl FnMut(&mut Self, &HashedAny, &mut T),
-        cb_data: &mut T,
-        py: Python,
+        node: usize,
+        done_queue: Option<&mut VecDeque<usize>>,
     ) -> PyResult<()> {
         // Check that this node is ready to be marked as done and mark it
         // There is currently a remove and an insert here just to take ownership of the value
         // so that we can reference it while modifying other values
         // Maybe there's a better way?
-        let parents = match self.node2nodeinfo.get_mut(node) {
-            Some(mut v) => {
-                match v.state {
-                    NodeState::Active => {
-                        return Err(exceptions::PyValueError::new_err(format!(
-                            "node {} was not passed out (still not ready)",
-                            node.0.as_ref(py).repr().unwrap().to_str().unwrap()
-                        )))
-                    }
-                    NodeState::Done => {
-                        return Err(exceptions::PyValueError::new_err(format!(
-                            "node {} was already marked as done",
-                            node.0.as_ref(py).repr().unwrap().to_str().unwrap()
-                        )))
-                    }
-                    NodeState::Ready => v.state = NodeState::Done,
-                }
-                v.parents.clone()
-            }
-            None => {
+        let nodeinfo = self.idx2nodeinfo.get_mut(&node).unwrap();
+        match nodeinfo.state {
+            NodeState::Active => {
                 return Err(exceptions::PyValueError::new_err(format!(
-                    "node {} was not added using add()",
-                    node.0.as_ref(py).repr().unwrap().to_str().unwrap()
+                    "node {} was not passed out (still not ready)",
+                    hashed_node_to_str(&nodeinfo.node)?
                 )))
             }
+            NodeState::Done => {
+                return Err(exceptions::PyValueError::new_err(format!(
+                    "node {} was already marked as done",
+                    hashed_node_to_str(&nodeinfo.node)?
+                )))
+            }
+            NodeState::Ready => nodeinfo.state = NodeState::Done,
         };
         self.n_finished += 1;
         // Find all parents and reduce their dependency count by one,
         // returning all parents w/o any further dependencies
+        let q = match done_queue {
+            Some(v) => v,
+            None => &mut self.ready_nodes,
+        };
         let mut parent_info: &mut NodeInfo;
-        for parent in parents {
-            parent_info = self.node2nodeinfo.get_mut(&parent).unwrap();
+        for parent in self.parents.get(&node).unwrap() {
+            parent_info = self.idx2nodeinfo.get_mut(&parent).unwrap();
             parent_info.npredecessors -= 1;
             if parent_info.npredecessors == 0 {
                 parent_info.state = NodeState::Ready;
-                done_cb(self, &parent, cb_data);
+                q.push_back(*parent);
             }
         }
         Ok(())
     }
+    fn new_node(&mut self, node: &HashedAny) -> usize {
+        self.node_idx_counter += 1;
+        let nodeinfo = NodeInfo {
+            node: node.clone(),
+            state: NodeState::Active,
+            npredecessors: 0,
+        };
+        self.node2idx.insert(node.clone(), self.node_idx_counter);
+        self.idx2nodeinfo.insert(self.node_idx_counter, nodeinfo);
+        self.parents.insert(self.node_idx_counter, Vec::new());
+        self.children.insert(self.node_idx_counter, Vec::new());
+        self.node_idx_counter
+    }
+    fn get_or_insert_node_idx(&mut self, node: &HashedAny) -> usize {
+        match self.node2idx.get(node) {
+            Some(&v) => return v,
+            None => (),
+        }
+        self.new_node(node)
+    }
 
     fn add_node(&mut self, node: HashedAny, children: Vec<HashedAny>) -> PyResult<()> {
-        let mut nodeinfo = self
-            .node2nodeinfo
-            .entry(node.clone())
-            .or_insert_with(|| NodeInfo {
-                children: children.clone(),
-                ..Default::default()
-            });
+        // Insert if it doesn't exist
+        let nodeidx = self.get_or_insert_node_idx(&node);
+        let nodeinfo = self.idx2nodeinfo.get_mut(&nodeidx).unwrap();
         nodeinfo.npredecessors += children.len();
+        let mut child_idx: usize;
         for child in children {
-            self.node2nodeinfo
-                .entry(child)
-                .or_insert_with(|| NodeInfo::default())
-                .parents
-                .push(node.clone());
+            child_idx = self.get_or_insert_node_idx(&child);
+            self.parents
+                .entry(child_idx)
+                .or_insert_with(Vec::new)
+                .push(nodeidx);
         }
         Ok(())
     }
-    fn find_cycle(&self) -> Option<Vec<Py<PyAny>>> {
-        let mut seen = HashSet::new();
-        let mut stack: Vec<&HashedAny> = Vec::new();
+    fn find_cycle(&self) -> Option<Vec<usize>> {
+        let mut seen: HashSet<usize> = HashSet::new();
+        let mut stack = Vec::new();
         let mut itstack = Vec::new();
-        let mut node2stackidx = HashMap::new();
+        let mut node2stackidx: HashMap<usize, usize, BuildNoHashHasher<usize>> = HashMap::with_hasher(BuildNoHashHasher::default());
+        let mut node: usize;
 
-        for mut node in self.node2nodeinfo.keys() {
+        for n in self.idx2nodeinfo.keys() {
+            node = *n;
             // // Only begin exploring from root nodes
             // if nodeinfo.parents.len() != 0 {
             //     continue;
             // }
-            if seen.contains(node) {
+            if seen.contains(&node) {
                 continue;
             }
             'outer: loop {
-                if seen.contains(node) {
+                if seen.contains(&node) {
                     // If this node is in the current stack, we have a cycle
-                    if node2stackidx.contains_key(node) {
-                        let start_idx = node2stackidx.get(node).unwrap();
-                        let mut res = Vec::with_capacity(stack.len() - *start_idx);
-                        for n in stack[*start_idx..].iter() {
-                            res.push(n.0.clone())
-                        }
-                        res.push(node.0.clone());
+                    if node2stackidx.contains_key(&node) {
+                        let start_idx = node2stackidx.get(&node).unwrap();
+                        let mut res = stack[*start_idx..].to_vec();
+                        res.push(node);
                         return Some(res);
                     }
                 } else {
                     seen.insert(node);
-                    itstack.push(self.node2nodeinfo.get(node).unwrap().parents.iter());
+                    itstack.push(self.parents.get(&node).unwrap().iter());
                     node2stackidx.insert(node, stack.len());
                     stack.push(node);
                 }
@@ -159,12 +181,12 @@ impl TopologicalSorter {
                 while !stack.is_empty() {
                     match itstack.last_mut().unwrap().next() {
                         Some(parent) => {
-                            node = parent;
+                            node = *parent;
                             broke = true;
                             break;
                         }
                         None => {
-                            node2stackidx.remove(stack.pop().unwrap());
+                            node2stackidx.remove(&stack.pop().unwrap());
                             itstack.pop();
                             continue;
                         }
@@ -185,7 +207,7 @@ impl TopologicalSorter {
         self.add_node(node, predecessors)?;
         Ok(())
     }
-    fn prepare(&mut self, py: Python) -> PyResult<()> {
+    fn prepare(&mut self) -> PyResult<()> {
         if self.prepared {
             return Err(exceptions::PyValueError::new_err(
                 "cannot prepare() more than once",
@@ -193,21 +215,21 @@ impl TopologicalSorter {
         }
         match self.find_cycle() {
             Some(cycle) => {
-                let mut items = Vec::new();
-                for item in &cycle {
-                    items.push(item.as_ref(py).repr()?.to_str()?);
-                }
+                let items: PyResult<Vec<String>> = cycle
+                    .iter()
+                    .map(|n| hashed_node_to_str(&self.idx2nodeinfo.get(&n).unwrap().node))
+                    .collect();
                 return Err(CycleError::new_err((
-                    format!("nodes are in a cycle [{}]", items.join(", ")),
+                    format!("nodes are in a cycle [{}]", items?.join(", ")),
                     cycle,
                 )));
             }
             None => (),
         }
         self.prepared = true;
-        for (node, nodeinfo) in self.node2nodeinfo.iter_mut() {
+        for (&node, nodeinfo) in self.idx2nodeinfo.iter_mut() {
             if nodeinfo.npredecessors == 0 {
-                self.ready_nodes.push(node.clone());
+                self.ready_nodes.push_back(node);
                 nodeinfo.state = NodeState::Ready;
             }
         }
@@ -216,11 +238,15 @@ impl TopologicalSorter {
     #[new]
     fn new(graph: Option<&PyDict>) -> PyResult<Self> {
         let mut this = TopologicalSorter {
-            node2nodeinfo: HashMap::new(),
-            ready_nodes: Vec::new(),
+            idx2nodeinfo: HashMap::with_hasher(BuildNoHashHasher::default()),
+            node2idx: HashMap::new(),
+            parents: HashMap::with_hasher(BuildNoHashHasher::default()),
+            children: HashMap::with_hasher(BuildNoHashHasher::default()),
+            ready_nodes: VecDeque::new(),
             n_passed_out: 0,
             n_finished: 0,
             prepared: false,
+            node_idx_counter: 0,
         };
         if !graph.is_none() {
             for (node, v) in graph.unwrap().iter() {
@@ -249,16 +275,24 @@ impl TopologicalSorter {
     /// # Arguments
     ///
     /// * `node` - A node in the graph
-    fn done(&mut self, nodes: Vec<HashedAny>, py: Python) -> PyResult<()> {
+    fn done(&mut self, nodes: Vec<HashedAny>) -> PyResult<()> {
         if !self.prepared {
             return Err(exceptions::PyValueError::new_err(
                 "prepare() must be called first",
             ));
         }
-        let mut done_db =
-            |s: &mut Self, done_node: &HashedAny, _: &mut ()| s.ready_nodes.push(done_node.clone());
+        let mut nodeidx: usize;
         for node in nodes {
-            self.mark_node_as_done(&node, &mut done_db, &mut (), py)?;
+            nodeidx = match self.node2idx.get(&node) {
+                Some(&v) => v,
+                None => {
+                    return Err(PyValueError::new_err(format!(
+                        "node {} was not added using add()",
+                        hashed_node_to_str(&node)?
+                    )))
+                }
+            };
+            self.mark_node_as_done(nodeidx, None)?;
         }
         Ok(())
     }
@@ -277,26 +311,28 @@ impl TopologicalSorter {
                 "prepare() must be called first",
             ));
         }
-        let ret = PyTuple::new(py, self.ready_nodes.iter().map(|node| node.0.clone()));
+        let ret = PyTuple::new(
+            py,
+            self.ready_nodes
+                .iter()
+                .map(|&node| self.idx2nodeinfo.get(&node).unwrap().node.0.clone()),
+        );
         self.n_passed_out += self.ready_nodes.len();
         self.ready_nodes.clear();
         Ok(ret)
     }
-    fn static_order<'py>(&mut self, py: Python<'py>) -> PyResult<Vec<Py<PyAny>>> {
-        self.prepare(py)?;
+    fn static_order<'py>(&mut self) -> PyResult<Vec<Py<PyAny>>> {
+        self.prepare()?;
         let mut out = Vec::new();
-        let mut queue: VecDeque<HashedAny> = VecDeque::from(self.ready_nodes.clone());
-        let mut node: HashedAny;
-        let mut done_cb = |_: &mut Self, done_node: &HashedAny, q: &mut VecDeque<HashedAny>| {
-            q.push_back(done_node.clone());
-        };
+        let mut queue: VecDeque<usize> = VecDeque::from(self.ready_nodes.clone());
+        let mut node: usize;
         loop {
             if queue.is_empty() {
                 break;
             }
             node = queue.pop_front().unwrap();
-            self.mark_node_as_done(&node, &mut done_cb, &mut queue, py)?;
-            out.push(node.0);
+            self.mark_node_as_done(node, Some(&mut queue))?;
+            out.push(self.idx2nodeinfo.get(&node).unwrap().node.0.clone());
         }
         self.n_passed_out += out.len();
         Ok(out)

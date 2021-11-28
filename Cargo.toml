@@ -14,5 +14,8 @@ features = ["extension-module", "abi3-py36"]
 [dependencies.pyo3-build-config]
 version = "0.15.1"
 
+[dependencies]
+nohash-hasher = "0.2.0"
+
 [package.metadata.maturin]
 python-source = "python"

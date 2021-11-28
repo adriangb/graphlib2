@@ -131,7 +131,10 @@ def test_no_dependencies(
 
 def test_node_repeated_in_dependencies():
     # Test same node multiple times in dependencies
-    assert_expected_resolution({1: {2}, 3: {4}, 0: [2, 4, 4, 4, 4, 4]}, [(2, 4), (0, 1, 3)])
+    assert_expected_resolution(
+        {0: [2, 4, 4, 4, 4, 4], 1: {2}, 3: {4}},
+        [(2, 4), (0, 1, 3)]
+    )
 
     # Test adding the same dependency multiple times
     ts: graphlib.TopologicalSorter[int] = graphlib.TopologicalSorter()

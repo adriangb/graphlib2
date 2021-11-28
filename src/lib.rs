@@ -320,6 +320,7 @@ impl TopologicalSorter {
                 for node in &self.ready_nodes {
                     ret.push(self.idx2nodeinfo.get(&node).unwrap().node.0.clone())
                 }
+                self.n_passed_out += self.ready_nodes.len();
                 self.ready_nodes.clear();
                 Ok(ret)
             }

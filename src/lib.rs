@@ -275,26 +275,30 @@ impl TopologicalSorter {
     /// # Arguments
     ///
     /// * `node` - A node in the graph
-    fn done(&mut self, nodes: Vec<HashedAny>) -> PyResult<()> {
-        if !self.prepared {
-            return Err(exceptions::PyValueError::new_err(
-                "prepare() must be called first",
-            ));
-        }
-        let mut nodeidx: usize;
-        for node in nodes {
-            nodeidx = match self.node2idx.get(&node) {
-                Some(&v) => v,
-                None => {
-                    return Err(PyValueError::new_err(format!(
-                        "node {} was not added using add()",
-                        hashed_node_to_str(&node)?
-                    )))
+    fn done(&mut self, nodes: Vec<HashedAny>, py: Python) -> PyResult<()> {
+        py.allow_threads(|| 
+            {
+                if !self.prepared {
+                    return Err(exceptions::PyValueError::new_err(
+                        "prepare() must be called first",
+                    ));
                 }
-            };
-            self.mark_node_as_done(nodeidx, None)?;
-        }
-        Ok(())
+                let mut nodeidx: usize;
+                for node in nodes {
+                    nodeidx = match self.node2idx.get(&node) {
+                        Some(&v) => v,
+                        None => {
+                            return Err(PyValueError::new_err(format!(
+                                "node {} was not added using add()",
+                                hashed_node_to_str(&node)?
+                            )))
+                        }
+                    };
+                    self.mark_node_as_done(nodeidx, None)?;
+                }
+                Ok(())
+            }
+        )
     }
     fn is_active(&self) -> PyResult<bool> {
         if !self.prepared {
@@ -306,20 +310,21 @@ impl TopologicalSorter {
     }
     /// Returns all nodes with no dependencies
     fn get_ready<'py>(&mut self, py: Python<'py>) -> PyResult<&'py PyTuple> {
-        if !self.prepared {
-            return Err(exceptions::PyValueError::new_err(
-                "prepare() must be called first",
-            ));
-        }
-        let ret = PyTuple::new(
-            py,
-            self.ready_nodes
-                .iter()
-                .map(|&node| self.idx2nodeinfo.get(&node).unwrap().node.0.clone()),
-        );
-        self.n_passed_out += self.ready_nodes.len();
-        self.ready_nodes.clear();
-        Ok(ret)
+        let ret = py.allow_threads(|| {
+                if !self.prepared {
+                    return Err(exceptions::PyValueError::new_err(
+                        "prepare() must be called first",
+                    ));
+                }
+                let mut ret: Vec<Py<PyAny>> = Vec::with_capacity(self.ready_nodes.len());
+                for node in &self.ready_nodes {
+                    ret.push(self.idx2nodeinfo.get(&node).unwrap().node.0.clone())
+                }
+                self.ready_nodes.clear();
+                Ok(ret)
+            }
+        )?;
+        Ok(PyTuple::new(py,&ret))
     }
     fn static_order<'py>(&mut self) -> PyResult<Vec<Py<PyAny>>> {
         self.prepare()?;

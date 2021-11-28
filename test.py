@@ -1,44 +1,36 @@
-from typing import Dict, Hashable
+from __future__ import annotations
 
-import hypothesis.strategies as st
-from hypothesis.stateful import Bundle, RuleBasedStateMachine, rule
+from concurrent.futures import ThreadPoolExecutor
+from collections import defaultdict
+from time import time
+from typing import *
 
-from graphlib2 import PyHashMap
+import igraph
 
-
-class HashMapComparison(RuleBasedStateMachine):
-    def __init__(self):
-        super().__init__()
-        self.python: Dict[Hashable, Hashable] = {}
-        self.rust = 
-
-    keys = Bundle("keys")
-    values = Bundle("values")
-
-    @rule(target=keys, k=st.binary())
-    def add_key(self, k):
-        return k
-
-    @rule(target=values, v=st.binary())
-    def add_value(self, v):
-        return v
-
-    @rule(k=keys, v=values)
-    def save(self, k, v):
-        self.model[k].add(v)
-        self.database.save(k, v)
-
-    @rule(k=keys, v=values)
-    def delete(self, k, v):
-        self.model[k].discard(v)
-        self.database.delete(k, v)
-
-    @rule(k=keys)
-    def values_agree(self, k):
-        assert set(self.database.fetch(k)) == self.model[k]
-
-    def teardown(self):
-        shutil.rmtree(self.tempd)
+from graphlib2 import TopologicalSorter
 
 
-TestDBComparison = DatabaseComparison.TestCase
+def get_branched_graph(n: int) -> Dict[int, List[int]]:
+    g = igraph.Graph.Tree_Game(n, directed=True)
+    res: Dict[int, List[int]] = defaultdict(list)
+    for source, dest in g.get_edgelist():
+        res[source].append(dest)
+    return res
+
+
+def f(t: TopologicalSorter[int]) -> None:
+    while t.is_active():
+        new = t.get_ready()
+        t.done(*new)
+
+
+data = get_branched_graph(1_000_000)
+ts1 = TopologicalSorter(data)
+ts1.prepare()
+ts2 = TopologicalSorter(data)
+ts2.prepare()
+start = time()
+with ThreadPoolExecutor(1) as exec:
+    exec.submit(f, ts1)
+    exec.submit(f, ts2)
+print(time()-start)

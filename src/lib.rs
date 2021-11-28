@@ -48,6 +48,7 @@ struct TopologicalSorter {
     n_passed_out: usize,
     n_finished: usize,
     prepared: bool,
+    // py_to_idx: HashMap<HashedAny, usize>,
 }
 
 impl TopologicalSorter {

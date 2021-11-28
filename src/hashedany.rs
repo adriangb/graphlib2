@@ -30,6 +30,9 @@ impl hash::Hash for HashedAny {
 
 impl cmp::PartialEq for HashedAny {
     fn eq(&self, other: &Self) -> bool {
+        if self.0.eq(&other.0) {
+            return true;
+        }
         Python::with_gil(|py| -> PyResult<bool> {
             Ok(self.0.as_ref(py).rich_compare(other.0.as_ref(py), CompareOp::Eq)?.is_true()?)
         }).unwrap()

@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::hash::BuildHasherDefault;
 
+use nohash_hasher::{IntMap, IntSet};
 use pyo3::create_exception;
 use pyo3::exceptions;
 use pyo3::exceptions::PyValueError;
@@ -11,14 +12,12 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::types::PyTuple;
 use pyo3::{Py, PyAny, Python};
-use nohash_hasher::{IntMap,IntSet};
 use seahash::SeaHasher;
 
 mod hashedany;
 use crate::hashedany::HashedAny;
 
 create_exception!(graphlib2, CycleError, exceptions::PyValueError);
-
 
 #[derive(Debug, Clone, Copy)]
 enum NodeState {
@@ -27,8 +26,7 @@ enum NodeState {
     Done,
 }
 
-
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 struct NodeInfo {
     node: HashedAny,
     state: NodeState,
@@ -41,7 +39,7 @@ struct NodeInfo {
 // 2. We store parents and children outside of NodeInfo so that we can borrow them as mutable seperately
 // Other than that, the algorithm and representation of the graph are very similar
 
-#[pyclass(module = "graphlib2",freelist=8)]
+#[pyclass(module = "graphlib2", freelist = 8)]
 #[derive(Clone)]
 struct TopologicalSorter {
     id2nodeinfo: IntMap<u32, NodeInfo>,
@@ -274,29 +272,27 @@ impl TopologicalSorter {
     ///
     /// * `nodes` - Python objects representing nodes in the graph
     fn done(&mut self, nodes: Vec<HashedAny>, py: Python) -> PyResult<()> {
-        py.allow_threads(|| 
-            {
-                if !self.prepared {
-                    return Err(exceptions::PyValueError::new_err(
-                        "prepare() must be called first",
-                    ));
-                }
-                let mut nodeid: u32;
-                for node in nodes {
-                    nodeid = match self.node2id.get(&node) {
-                        Some(&v) => v,
-                        None => {
-                            return Err(PyValueError::new_err(format!(
-                                "node {} was not added using add()",
-                                hashed_node_to_str(&node)?
-                            )))
-                        }
-                    };
-                    self.mark_node_as_done(nodeid, None)?;
-                }
-                Ok(())
+        py.allow_threads(|| {
+            if !self.prepared {
+                return Err(exceptions::PyValueError::new_err(
+                    "prepare() must be called first",
+                ));
             }
-        )
+            let mut nodeid: u32;
+            for node in nodes {
+                nodeid = match self.node2id.get(&node) {
+                    Some(&v) => v,
+                    None => {
+                        return Err(PyValueError::new_err(format!(
+                            "node {} was not added using add()",
+                            hashed_node_to_str(&node)?
+                        )))
+                    }
+                };
+                self.mark_node_as_done(nodeid, None)?;
+            }
+            Ok(())
+        })
     }
     fn is_active(&self) -> PyResult<bool> {
         if !self.prepared {
@@ -309,22 +305,21 @@ impl TopologicalSorter {
     /// Returns all nodes with no dependencies
     fn get_ready<'py>(&mut self, py: Python<'py>) -> PyResult<&'py PyTuple> {
         let ret = py.allow_threads(|| {
-                self.iterating = true;
-                if !self.prepared {
-                    return Err(exceptions::PyValueError::new_err(
-                        "prepare() must be called first",
-                    ));
-                }
-                let mut ret: Vec<Py<PyAny>> = Vec::with_capacity(self.ready_nodes.len());
-                for node in &self.ready_nodes {
-                    ret.push(self.id2nodeinfo.get(&node).unwrap().node.0.clone())
-                }
-                self.n_passed_out += self.ready_nodes.len() as u32;
-                self.ready_nodes.clear();
-                Ok(ret)
+            self.iterating = true;
+            if !self.prepared {
+                return Err(exceptions::PyValueError::new_err(
+                    "prepare() must be called first",
+                ));
             }
-        )?;
-        Ok(PyTuple::new(py,&ret))
+            let mut ret: Vec<Py<PyAny>> = Vec::with_capacity(self.ready_nodes.len());
+            for node in &self.ready_nodes {
+                ret.push(self.id2nodeinfo.get(&node).unwrap().node.0.clone())
+            }
+            self.n_passed_out += self.ready_nodes.len() as u32;
+            self.ready_nodes.clear();
+            Ok(ret)
+        })?;
+        Ok(PyTuple::new(py, &ret))
     }
     fn static_order<'py>(&mut self) -> PyResult<Vec<Py<PyAny>>> {
         self.prepare()?;
@@ -360,22 +355,16 @@ impl TopologicalSorter {
             match self.node2id.get(&node) {
                 Some(v) => queue.push_back(*v),
                 None => {
-                    return Err(
-                        PyValueError::new_err(
-                            format!(
-                                "The node {:?} was not added using add()",
-                                node
-                            )
-                        )
-                    )
+                    return Err(PyValueError::new_err(format!(
+                        "The node {:?} was not added using add()",
+                        node
+                    )))
                 }
             }
         }
         let mut node: u32;
-        let mut maybe_ready_nodes: HashSet<u32, BuildSeaHasher> = HashSet::with_capacity_and_hasher(
-            self.ready_nodes.len(),
-            BuildSeaHasher::default(),
-        );
+        let mut maybe_ready_nodes: HashSet<u32, BuildSeaHasher> =
+            HashSet::with_capacity_and_hasher(self.ready_nodes.len(), BuildSeaHasher::default());
         for node in &self.ready_nodes {
             maybe_ready_nodes.insert(*node);
         }
@@ -387,7 +376,7 @@ impl TopologicalSorter {
             maybe_ready_nodes.remove(&node);
             match self.id2nodeinfo.remove(&node) {
                 Some(_) => (),
-                None => continue,  // node was already removed
+                None => continue, // node was already removed
             }
             for child in self.children.remove(&node).unwrap() {
                 queue.push_back(child)
@@ -425,17 +414,14 @@ fn graphlib2(_py: Python, m: &PyModule) -> PyResult<()> {
     Ok(())
 }
 
-
 // Misc helper methods
 type BuildSeaHasher = BuildHasherDefault<SeaHasher>;
-
 
 fn hashed_node_to_str(node: &HashedAny) -> PyResult<String> {
     Python::with_gil(|py| -> PyResult<String> {
         Ok(node.0.as_ref(py).repr()?.to_str()?.to_string())
     })
 }
-
 
 // Use the result of calling repr() on the Python object as the debug string value
 impl fmt::Debug for HashedAny {

@@ -4,7 +4,6 @@ use std::hash;
 use pyo3::basic::CompareOp;
 use pyo3::prelude::*;
 
-
 // We can't put a Py<PyAny> directly into a HashMap key
 // So to be able to hold references to arbitrary Python objects in HashMap as keys
 // we wrap them in a struct that gets the hash() when it receives the object from Python
@@ -12,13 +11,9 @@ use pyo3::prelude::*;
 #[derive(Clone)]
 pub struct HashedAny(pub Py<PyAny>, isize);
 
-
-impl <'source>FromPyObject<'source> for HashedAny
-{
+impl<'source> FromPyObject<'source> for HashedAny {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        Ok(
-            HashedAny(ob.into(), ob.hash()?)
-        )
+        Ok(HashedAny(ob.into(), ob.hash()?))
     }
 }
 
@@ -34,8 +29,13 @@ impl cmp::PartialEq for HashedAny {
             return true;
         }
         Python::with_gil(|py| -> PyResult<bool> {
-            Ok(self.0.as_ref(py).rich_compare(other.0.as_ref(py), CompareOp::Eq)?.is_true()?)
-        }).unwrap()
+            Ok(self
+                .0
+                .as_ref(py)
+                .rich_compare(other.0.as_ref(py), CompareOp::Eq)?
+                .is_true()?)
+        })
+        .unwrap()
     }
 }
 

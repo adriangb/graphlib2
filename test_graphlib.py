@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, Collection, Dict, Generator, Hashable, Iterable, Sequence, Set, TypeVar, Protocol
+from typing import Any, Collection, Dict, Generator, Hashable, Iterable, List, Sequence, Set, TypeVar, Protocol
 
 
 import graphlib2 as graphlib
@@ -34,13 +34,12 @@ def cycles_match(c1: Iterable[T], c2: Iterable[T]) -> bool:
     return s1 in s2
 
 
-def get_static_order_from_groups(ts: graphlib.TopologicalSorter[T]):
-    ts.prepare()
+def get_static_order_from_groups(ts: graphlib.TopologicalSorter[T]) -> Generator[Set[T], None, None]:
     while ts.is_active():
         nodes = ts.get_ready()
         for node in nodes:
             ts.done(node)
-        yield tuple(sorted(nodes))
+        yield set(sorted(nodes))
 
 
 def assert_expected_resolution(
@@ -48,7 +47,8 @@ def assert_expected_resolution(
     expected: Iterable[Collection[T]]
 ):
     ts = graphlib.TopologicalSorter(graph)
-    assert list(get_static_order_from_groups(ts)) == list(expected)
+    ts.prepare()
+    assert list(get_static_order_from_groups(ts)) == [set(e) for e in expected]
 
     ts = graphlib.TopologicalSorter(graph)
     group_iterator = iter(ts.static_order())
@@ -111,8 +111,8 @@ def assert_cycles(
     ]
 )
 def test_simple_cases(
-    graph: Dict[T, Iterable[T]],
-    expected: Iterable[Collection[T]],
+    graph: Dict[int, Iterable[int]],
+    expected: Iterable[Collection[int]],
 ):
     assert_expected_resolution(graph, expected)
 
@@ -123,8 +123,8 @@ def test_simple_cases(
     ]
 )
 def test_no_dependencies(
-    graph: Dict[T, Iterable[T]],
-    expected: Iterable[Collection[T]],
+    graph: Dict[int, Iterable[int]],
+    expected: Iterable[Collection[int]],
 ):
     assert_expected_resolution(graph, expected)
 
@@ -192,8 +192,8 @@ def test_empty():
     ]
 )
 def test_cycle(
-    graph: Dict[T, Sequence[T]],
-    cycles: Iterable[Sequence[T]],
+    graph: Dict[int, Sequence[int]],
+    cycles: Iterable[Sequence[int]],
 ):
     assert_cycles(graph, cycles)
  
@@ -298,6 +298,69 @@ def test_order_of_insertion_does_not_matter_between_groups():
     ts2.add(4, 5)
 
     assert list(get_groups(ts)) == list(get_groups(ts2))
+
+
+@pytest.mark.parametrize(
+    "graph,removed,expected", [
+        (
+            {0: [1, 2], 1: [], 2: [3]},
+            [],
+            [(3,1), (2,), (0,)],
+        ),
+        (
+            {0: [1, 2], 1: [], 2: [3]},
+            [2],
+            [(1,), (0,)],
+        ),
+        (
+            {0: [1, 2], 1: [], 2: [3]},
+            [1],
+            [(3,), (2,), (0,)],
+        ),
+    ]
+)
+def test_remove_nodes(
+    graph: Dict[int, Iterable[int]],
+    removed: List[int],
+    expected: Iterable[Collection[int]],
+):
+    ts = graphlib.TopologicalSorter(graph)
+    ts.prepare()
+    ts.remove_nodes(removed)
+    assert list(get_static_order_from_groups(ts)) == [set(e) for e in expected]
+
+
+def test_remove_root_node():
+    graph = {0: [1]}
+    ts = graphlib.TopologicalSorter(graph)
+    ts.prepare()
+    ts.remove_nodes([0])
+    assert not ts.is_active()
+    assert ts.get_ready() == ()
+
+
+def test_remove_after_copy():
+    graph = {0: [1]}
+    ts = graphlib.TopologicalSorter(graph)
+    ts.prepare()
+    ts2 = ts.copy()
+    ts2.remove_nodes([1])
+    assert ts.is_active()
+    assert ts.get_ready() == (1,)
+    assert ts2.is_active()
+    assert ts2.get_ready() == (0,)
+
+
+def test_execute_after_copy():
+    graph = {0: [1]}
+    ts = graphlib.TopologicalSorter(graph)
+    ts2 = ts.copy()
+
+    assert list(ts.static_order()) == [1, 0]
+    assert not ts.is_active()
+
+    assert list(ts2.static_order()) == [1, 0]
+    assert not ts2.is_active()
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::fmt;
+use std::hash::{BuildHasherDefault};
 
 use pyo3::create_exception;
 use pyo3::exceptions;
@@ -11,12 +12,15 @@ use pyo3::types::PyDict;
 use pyo3::types::PyTuple;
 use pyo3::{Py, PyAny, Python};
 use nohash_hasher::{IntMap,IntSet};
-
+use seahash::SeaHasher;
 
 mod hashedany;
 use crate::hashedany::HashedAny;
 
 create_exception!(graphlib2, CycleError, exceptions::PyValueError);
+
+
+type BuildSeaHasher = BuildHasherDefault<SeaHasher>;
 
 
 fn hashed_node_to_str(node: &HashedAny) -> PyResult<String> {
@@ -55,13 +59,14 @@ struct NodeInfo {
 #[derive(Clone)]
 struct TopologicalSorter {
     id2nodeinfo: IntMap<u32, NodeInfo>,
-    node2id: HashMap<HashedAny, u32>,
+    node2id: HashMap<HashedAny, u32, BuildSeaHasher>,
     parents: IntMap<u32, HashSet<u32>>,
     children: IntMap<u32, IntSet<u32>>,
     ready_nodes: VecDeque<u32>,
     n_passed_out: u32,
     n_finished: u32,
     prepared: bool,
+    iterating: bool,
     node_id_counter: u32,
     node_id_factory: PyObject,
 }
@@ -243,13 +248,14 @@ impl TopologicalSorter {
     fn new(graph: Option<&PyDict>, node_id_factory: PyObject) -> PyResult<Self> {
         let mut this = TopologicalSorter {
             id2nodeinfo: IntMap::default(),
-            node2id: HashMap::new(),
+            node2id: HashMap::default(),
             parents: IntMap::default(),
             children: IntMap::default(),
             ready_nodes: VecDeque::new(),
             n_passed_out: 0,
             n_finished: 0,
             prepared: false,
+            iterating: false,
             node_id_counter: 0,
             node_id_factory: node_id_factory,
         };
@@ -346,7 +352,63 @@ impl TopologicalSorter {
             out.push(self.id2nodeinfo.get(&node).unwrap().node.0.clone());
         }
         self.n_passed_out += out.len() as u32;
+        self.n_finished += out.len() as u32;
+        self.ready_nodes.clear();
         Ok(out)
+    }
+    fn remove_nodes(&mut self, nodes: Vec<HashedAny>) -> PyResult<()> {
+        if !self.prepared {
+            return Err(exceptions::PyValueError::new_err(
+                "prepare() must be called before remove_nodes()",
+            ));
+        }
+        let mut queue: VecDeque<u32> = VecDeque::with_capacity(nodes.len());
+        for node in nodes {
+            match self.node2id.get(&node) {
+                Some(v) => queue.push_back(*v),
+                None => {
+                    return Err(
+                        PyValueError::new_err(
+                            format!(
+                                "The node {:?} was not added using add()",
+                                node
+                            )
+                        )
+                    )
+                }
+            }
+        }
+        let mut node: u32;
+        loop {
+            if queue.is_empty() {
+                break;
+            }
+            node = queue.pop_front().unwrap();
+            match self.id2nodeinfo.remove(&node) {
+                Some(_) => (),
+                None => continue,  // node was already removed
+            }
+            for child in self.children.remove(&node).unwrap() {
+                queue.push_back(child)
+            }
+            for parent in self.parents.remove(&node).unwrap() {
+                match self.id2nodeinfo.get_mut(&parent) {
+                    Some(mut parent_nodeinfo) => {
+                        parent_nodeinfo.npredecessors -= 1;
+                        self.children.get_mut(&parent).unwrap().remove(&node);
+                    }
+                    None => (), // parent was removed
+                }
+            }
+        }
+        self.ready_nodes.clear();
+        for (&node, nodeinfo) in self.id2nodeinfo.iter_mut() {
+            if nodeinfo.npredecessors == 0 {
+                self.ready_nodes.push_back(node);
+                nodeinfo.state = NodeState::Ready;
+            }
+        }   
+        Ok(())
     }
 }
 

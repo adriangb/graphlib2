@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import AbstractSet, Callable, Generic, Iterable, Optional, Protocol, Tuple, TypeVar
+from typing import AbstractSet, Callable, Generic, Iterable, Optional, Protocol, Sequence, Tuple, TypeVar
 
 from .graphlib2 import CycleError
 from .graphlib2 import TopologicalSorter as _TopologicalSorter
@@ -50,9 +50,6 @@ class TopologicalSorter(Generic[_T]):
     def is_active(self) -> bool:
         return self._ts.is_active()
 
-    def remove(self, *nodes: _T) -> None:
-        self._ts.remove(nodes)
-
     def prepare(self) -> None:
         self._ts.prepare()
 
@@ -63,6 +60,9 @@ class TopologicalSorter(Generic[_T]):
         new: TopologicalSorter[_T] = object.__new__(TopologicalSorter)
         new._ts = self._ts.copy()
         return new
+    
+    def remove_nodes(self, nodes: Sequence[_T]) -> None:
+        self._ts.remove_nodes(nodes)
 
 
 __all__ = ("TopologicalSorter", "CycleError")

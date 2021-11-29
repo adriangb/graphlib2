@@ -16,6 +16,7 @@ version = "0.15.1"
 
 [dependencies]
 nohash-hasher = "0.2.0"
+seahash = "4.1.0"
 
 [package.metadata.maturin]
 python-source = "python"

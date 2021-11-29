@@ -35,4 +35,5 @@ In other words: please vet the code yourself before using this.
 1. Run `make init`
 1. Run `make test`
 
+[di]: https://github.com/adriangb/di
 [graphlib]: https://docs.python.org/3/library/graphlib.html

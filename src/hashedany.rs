@@ -28,14 +28,14 @@ impl cmp::PartialEq for HashedAny {
         if self.0.eq(&other.0) {
             return true;
         }
-        Python::with_gil(|py| -> PyResult<bool> {
-            Ok(self
-                .0
+        Python::with_gil(|py| -> bool {
+            self.0
                 .as_ref(py)
-                .rich_compare(other.0.as_ref(py), CompareOp::Eq)?
-                .is_true()?)
+                .rich_compare(other.0.as_ref(py), CompareOp::Eq)
+                .unwrap()
+                .is_true()
+                .unwrap()
         })
-        .unwrap()
     }
 }
 

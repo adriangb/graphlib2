@@ -90,7 +90,7 @@ impl TopologicalSorter {
         };
         let mut parent_info: &mut NodeInfo;
         for parent in self.parents.get(&node).unwrap() {
-            parent_info = self.id2nodeinfo.get_mut(&parent).unwrap();
+            parent_info = self.id2nodeinfo.get_mut(parent).unwrap();
             parent_info.npredecessors -= 1;
             if parent_info.npredecessors == 0 {
                 parent_info.state = NodeState::Ready;
@@ -118,9 +118,8 @@ impl TopologicalSorter {
         node_id
     }
     fn get_or_insert_node_id(&mut self, node: &HashedAny) -> u32 {
-        match self.node2id.get(node) {
-            Some(&v) => return v,
-            None => (),
+        if let Some(&v) = self.node2id.get(node) {
+            return v;
         }
         self.new_node(node)
     }
@@ -205,20 +204,17 @@ impl TopologicalSorter {
                 "cannot prepare() more than once",
             ));
         }
-        match self.find_cycle() {
-            Some(cycle) => {
-                let maybe_items: PyResult<Vec<String>> = cycle
-                    .iter()
-                    .map(|n| hashed_node_to_str(&self.id2nodeinfo.get(&n).unwrap().node))
-                    .collect();
-                let items = maybe_items?;
-                let items_str = items.clone().join(", ");
-                return Err(CycleError::new_err((
-                    format!("nodes are in a cycle [{}]", items_str),
-                    items,
-                )));
-            }
-            None => (),
+        if let Some(cycle) = self.find_cycle() {
+            let maybe_items: PyResult<Vec<String>> = cycle
+                .iter()
+                .map(|n| hashed_node_to_str(&self.id2nodeinfo.get(n).unwrap().node))
+                .collect();
+            let items = maybe_items?;
+            let items_str = items.join(", ");
+            return Err(CycleError::new_err((
+                format!("nodes are in a cycle [{}]", items_str),
+                items,
+            )));
         }
         self.prepared = true;
         for (&node, nodeinfo) in self.id2nodeinfo.iter_mut() {
@@ -242,10 +238,10 @@ impl TopologicalSorter {
             prepared: false,
             iterating: false,
             node_id_counter: 0,
-            node_id_factory: node_id_factory,
+            node_id_factory,
         };
-        if !graph.is_none() {
-            for (node, v) in graph.unwrap().iter() {
+        if let Some(g) = graph {
+            for (node, v) in g.iter() {
                 let i = v.iter()?;
                 let mut children: Vec<HashedAny> = Vec::new();
                 for el in i {
@@ -258,7 +254,7 @@ impl TopologicalSorter {
     }
     /// Returns string representation of the graph
     fn __str__(&self) -> PyResult<String> {
-        Ok(format!("TopologicalSorter()"))
+        Ok("TopologicalSorter()".to_string())
     }
     fn __repr__(&self) -> PyResult<String> {
         self.__str__()
@@ -313,7 +309,7 @@ impl TopologicalSorter {
             }
             let mut ret: Vec<Py<PyAny>> = Vec::with_capacity(self.ready_nodes.len());
             for node in &self.ready_nodes {
-                ret.push(self.id2nodeinfo.get(&node).unwrap().node.0.clone())
+                ret.push(self.id2nodeinfo.get(node).unwrap().node.0.clone())
             }
             self.n_passed_out += self.ready_nodes.len() as u32;
             self.ready_nodes.clear();
@@ -321,10 +317,10 @@ impl TopologicalSorter {
         })?;
         Ok(PyTuple::new(py, &ret))
     }
-    fn static_order<'py>(&mut self) -> PyResult<Vec<Py<PyAny>>> {
+    fn static_order(&mut self) -> PyResult<Vec<Py<PyAny>>> {
         self.prepare()?;
         let mut out = Vec::new();
-        let mut queue: VecDeque<u32> = VecDeque::from(self.ready_nodes.clone());
+        let mut queue = self.ready_nodes.clone();
         let mut node: u32;
         loop {
             if queue.is_empty() {
@@ -382,15 +378,12 @@ impl TopologicalSorter {
                 queue.push_back(child)
             }
             for parent in self.parents.remove(&node).unwrap() {
-                match self.id2nodeinfo.get_mut(&parent) {
-                    Some(mut parent_nodeinfo) => {
-                        parent_nodeinfo.npredecessors -= 1;
-                        if parent_nodeinfo.npredecessors == 0 {
-                            maybe_ready_nodes.insert(parent);
-                        }
-                        self.children.get_mut(&parent).unwrap().remove(&node);
+                if let Some(mut parent_nodeinfo) = self.id2nodeinfo.get_mut(&parent) {
+                    parent_nodeinfo.npredecessors -= 1;
+                    if parent_nodeinfo.npredecessors == 0 {
+                        maybe_ready_nodes.insert(parent);
                     }
-                    None => (), // parent was removed
+                    self.children.get_mut(&parent).unwrap().remove(&node);
                 }
             }
         }

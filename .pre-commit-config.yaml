@@ -1,9 +1,23 @@
-files: ^python/.*|^tests/.*
+files: ^python/.*|^tests/.*|^src/.*
 repos:
   - repo: https://github.com/ambv/black
     rev: 21.11b1
     hooks:
       - id: black
+  - repo: local
+    hooks:
+    - id: cargo-fmt
+      name: cargo-fmt
+      entry: cargo fmt
+      language: system
+      types: [rust]
+      pass_filenames: false
+    - id: cargo-clippy
+      name: cargo-clippy
+      entry: cargo clippy
+      language: system
+      types: [rust]
+      pass_filenames: false
   - repo: https://gitlab.com/pycqa/flake8
     rev: 3.9.2
     hooks:

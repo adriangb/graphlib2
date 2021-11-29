@@ -268,27 +268,36 @@ impl TopologicalSorter {
     ///
     /// * `nodes` - Python objects representing nodes in the graph
     fn done(&mut self, nodes: Vec<HashedAny>, py: Python) -> PyResult<()> {
-        py.allow_threads(|| {
-            if !self.prepared {
-                return Err(exceptions::PyValueError::new_err(
-                    "prepare() must be called first",
-                ));
-            }
-            let mut nodeid: u32;
-            for node in nodes {
-                nodeid = match self.node2id.get(&node) {
-                    Some(&v) => v,
-                    None => {
-                        return Err(PyValueError::new_err(format!(
-                            "node {} was not added using add()",
-                            hashed_node_to_str(&node)?
-                        )))
-                    }
-                };
-                self.mark_node_as_done(nodeid, None)?;
+        let mut node_ids = Vec::new();
+        if !self.prepared {
+            return Err(exceptions::PyValueError::new_err(
+                "prepare() must be called first",
+            ));
+        }
+        let mut node_id: u32;
+        // Run this loop before marking as done so that we avoid
+        // acquiring the GIL in a loop
+        for node in nodes {
+            node_id = match self.node2id.get(&node) {
+                Some(&v) => v,
+                None => {
+                    return Err(PyValueError::new_err(format!(
+                        "node {} was not added using add()",
+                        hashed_node_to_str(&node)?
+                    )))
+                }
+            };
+            node_ids.push(node_id);
+        }
+        py.allow_threads(|| -> PyResult<()> {
+            for node_id in node_ids {
+                if let Err(e) = self.mark_node_as_done(node_id, None) {
+                    return Err(e);
+                }
             }
             Ok(())
-        })
+        })?;
+        Ok(())
     }
     fn is_active(&self) -> PyResult<bool> {
         if !self.prepared {
@@ -335,7 +344,7 @@ impl TopologicalSorter {
         self.ready_nodes.clear();
         Ok(out)
     }
-    fn remove_nodes(&mut self, nodes: Vec<HashedAny>) -> PyResult<()> {
+    fn remove_nodes(&mut self, nodes: Vec<HashedAny>, py: Python) -> PyResult<()> {
         if !self.prepared {
             return Err(exceptions::PyValueError::new_err(
                 "prepare() must be called before remove_nodes()",
@@ -347,6 +356,8 @@ impl TopologicalSorter {
             ));
         }
         let mut queue: VecDeque<u32> = VecDeque::with_capacity(nodes.len());
+        // We need to do this part while we still have the GIL to avoid
+        // constantly re-acquiring it to call __eq__
         for node in nodes {
             match self.node2id.get(&node) {
                 Some(v) => queue.push_back(*v),
@@ -358,45 +369,50 @@ impl TopologicalSorter {
                 }
             }
         }
-        let mut node: u32;
-        let mut maybe_ready_nodes: HashSet<u32, BuildSeaHasher> =
-            HashSet::with_capacity_and_hasher(self.ready_nodes.len(), BuildSeaHasher::default());
-        for node in &self.ready_nodes {
-            maybe_ready_nodes.insert(*node);
-        }
-        loop {
-            if queue.is_empty() {
-                break;
+        py.allow_threads(|| {
+            let mut node: u32;
+            let mut maybe_ready_nodes: HashSet<u32, BuildSeaHasher> =
+                HashSet::with_capacity_and_hasher(
+                    self.ready_nodes.len(),
+                    BuildSeaHasher::default(),
+                );
+            for node in &self.ready_nodes {
+                maybe_ready_nodes.insert(*node);
             }
-            node = queue.pop_front().unwrap();
-            maybe_ready_nodes.remove(&node);
-            match self.id2nodeinfo.remove(&node) {
-                Some(_) => (),
-                None => continue, // node was already removed
-            }
-            for child in self.children.remove(&node).unwrap() {
-                queue.push_back(child)
-            }
-            for parent in self.parents.remove(&node).unwrap() {
-                if let Some(mut parent_nodeinfo) = self.id2nodeinfo.get_mut(&parent) {
-                    parent_nodeinfo.npredecessors -= 1;
-                    if parent_nodeinfo.npredecessors == 0 {
-                        maybe_ready_nodes.insert(parent);
+            loop {
+                if queue.is_empty() {
+                    break;
+                }
+                node = queue.pop_front().unwrap();
+                maybe_ready_nodes.remove(&node);
+                match self.id2nodeinfo.remove(&node) {
+                    Some(_) => (),
+                    None => continue, // node was already removed
+                }
+                for child in self.children.remove(&node).unwrap() {
+                    queue.push_back(child)
+                }
+                for parent in self.parents.remove(&node).unwrap() {
+                    if let Some(mut parent_nodeinfo) = self.id2nodeinfo.get_mut(&parent) {
+                        parent_nodeinfo.npredecessors -= 1;
+                        if parent_nodeinfo.npredecessors == 0 {
+                            maybe_ready_nodes.insert(parent);
+                        }
+                        self.children.get_mut(&parent).unwrap().remove(&node);
                     }
-                    self.children.get_mut(&parent).unwrap().remove(&node);
                 }
             }
-        }
-        self.ready_nodes.clear();
-        let mut node_info;
-        for node in maybe_ready_nodes {
-            node_info = self.id2nodeinfo.get_mut(&node).unwrap();
-            if node_info.npredecessors == 0 {
-                self.ready_nodes.push_back(node);
-                node_info.state = NodeState::Ready;
+            self.ready_nodes.clear();
+            let mut node_info;
+            for node in maybe_ready_nodes {
+                node_info = self.id2nodeinfo.get_mut(&node).unwrap();
+                if node_info.npredecessors == 0 {
+                    self.ready_nodes.push_back(node);
+                    node_info.state = NodeState::Ready;
+                }
             }
-        }
-        Ok(())
+            Ok(())
+        })
     }
 }
 

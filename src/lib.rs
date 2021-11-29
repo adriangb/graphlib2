@@ -379,11 +379,19 @@ impl TopologicalSorter {
             }
         }
         let mut node: u32;
+        let mut maybe_ready_nodes: HashSet<u32, BuildSeaHasher> = HashSet::with_capacity_and_hasher(
+            self.ready_nodes.len(),
+            BuildSeaHasher::default(),
+        );
+        for node in &self.ready_nodes {
+            maybe_ready_nodes.insert(*node);
+        }
         loop {
             if queue.is_empty() {
                 break;
             }
             node = queue.pop_front().unwrap();
+            maybe_ready_nodes.remove(&node);
             match self.id2nodeinfo.remove(&node) {
                 Some(_) => (),
                 None => continue,  // node was already removed
@@ -395,6 +403,9 @@ impl TopologicalSorter {
                 match self.id2nodeinfo.get_mut(&parent) {
                     Some(mut parent_nodeinfo) => {
                         parent_nodeinfo.npredecessors -= 1;
+                        if parent_nodeinfo.npredecessors == 0 {
+                            maybe_ready_nodes.insert(parent);
+                        }
                         self.children.get_mut(&parent).unwrap().remove(&node);
                     }
                     None => (), // parent was removed
@@ -402,12 +413,14 @@ impl TopologicalSorter {
             }
         }
         self.ready_nodes.clear();
-        for (&node, nodeinfo) in self.id2nodeinfo.iter_mut() {
-            if nodeinfo.npredecessors == 0 {
+        let mut node_info;
+        for node in maybe_ready_nodes {
+            node_info = self.id2nodeinfo.get_mut(&node).unwrap();
+            if node_info.npredecessors == 0 {
                 self.ready_nodes.push_back(node);
-                nodeinfo.state = NodeState::Ready;
+                node_info.state = NodeState::Ready;
             }
-        }   
+        }
         Ok(())
     }
 }

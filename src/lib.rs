@@ -54,15 +54,16 @@ struct NodeInfo {
 #[pyclass(module = "graphlib2",freelist=8)]
 #[derive(Clone)]
 struct TopologicalSorter {
-    idx2nodeinfo: IntMap<u32, NodeInfo>,
-    node2idx: HashMap<HashedAny, u32>,
+    id2nodeinfo: IntMap<u32, NodeInfo>,
+    node2id: HashMap<HashedAny, u32>,
     parents: IntMap<u32, HashSet<u32>>,
     children: IntMap<u32, IntSet<u32>>,
     ready_nodes: VecDeque<u32>,
     n_passed_out: u32,
     n_finished: u32,
     prepared: bool,
-    node_idx_counter: u32,
+    node_id_counter: u32,
+    node_id_factory: PyObject,
 }
 
 impl TopologicalSorter {
@@ -75,7 +76,7 @@ impl TopologicalSorter {
         // There is currently a remove and an insert here just to take ownership of the value
         // so that we can reference it while modifying other values
         // Maybe there's a better way?
-        let nodeinfo = self.idx2nodeinfo.get_mut(&node).unwrap();
+        let nodeinfo = self.id2nodeinfo.get_mut(&node).unwrap();
         match nodeinfo.state {
             NodeState::Active => {
                 return Err(exceptions::PyValueError::new_err(format!(
@@ -100,7 +101,7 @@ impl TopologicalSorter {
         };
         let mut parent_info: &mut NodeInfo;
         for parent in self.parents.get(&node).unwrap() {
-            parent_info = self.idx2nodeinfo.get_mut(&parent).unwrap();
+            parent_info = self.id2nodeinfo.get_mut(&parent).unwrap();
             parent_info.npredecessors -= 1;
             if parent_info.npredecessors == 0 {
                 parent_info.state = NodeState::Ready;
@@ -110,38 +111,39 @@ impl TopologicalSorter {
         Ok(())
     }
     fn new_node(&mut self, node: &HashedAny) -> u32 {
-        let node_idx = self.node_idx_counter;
+        let node_id = Python::with_gil(|py| -> u32 {
+            u32::extract(self.node_id_factory.call0(py).unwrap().as_ref(py)).unwrap()
+        });
         let nodeinfo = NodeInfo {
             node: node.clone(),
             state: NodeState::Active,
             npredecessors: 0,
         };
-        self.node2idx.insert(node.clone(), node_idx);
-        self.idx2nodeinfo.insert(node_idx, nodeinfo);
-        self.parents.insert(node_idx, HashSet::default());
-        self.children.insert(node_idx, HashSet::default());
-        self.node_idx_counter += 1;
-        node_idx
+        self.node2id.insert(node.clone(), node_id);
+        self.id2nodeinfo.insert(node_id, nodeinfo);
+        self.parents.insert(node_id, HashSet::default());
+        self.children.insert(node_id, HashSet::default());
+        self.node_id_counter += 1;
+        node_id
     }
-    fn get_or_insert_node_idx(&mut self, node: &HashedAny) -> u32 {
-        match self.node2idx.get(node) {
+    fn get_or_insert_node_id(&mut self, node: &HashedAny) -> u32 {
+        match self.node2id.get(node) {
             Some(&v) => return v,
             None => (),
         }
         self.new_node(node)
     }
-
     fn add_node(&mut self, node: HashedAny, children: Vec<HashedAny>) -> PyResult<()> {
         // Insert if it doesn't exist
-        let node_idx = self.get_or_insert_node_idx(&node);
-        let mut child_idx: u32;
+        let node_id = self.get_or_insert_node_id(&node);
+        let mut child_id: u32;
         for child in children {
-            child_idx = self.get_or_insert_node_idx(&child);
-            let new_child = self.children.get_mut(&node_idx).unwrap().insert(child_idx);
+            child_id = self.get_or_insert_node_id(&child);
+            let new_child = self.children.get_mut(&node_id).unwrap().insert(child_id);
             if new_child {
-                self.idx2nodeinfo.get_mut(&node_idx).unwrap().npredecessors += 1;
+                self.id2nodeinfo.get_mut(&node_id).unwrap().npredecessors += 1;
             }
-            self.parents.get_mut(&child_idx).unwrap().insert(node_idx);
+            self.parents.get_mut(&child_id).unwrap().insert(node_id);
         }
         Ok(())
     }
@@ -149,10 +151,10 @@ impl TopologicalSorter {
         let mut seen: HashSet<u32> = HashSet::new();
         let mut stack = Vec::new();
         let mut itstack = Vec::new();
-        let mut node2stackidx = IntMap::default();
+        let mut node2stackid = IntMap::default();
         let mut node: u32;
 
-        for n in self.idx2nodeinfo.keys() {
+        for n in self.id2nodeinfo.keys() {
             node = *n;
             // // Only begin exploring from root nodes
             // if nodeinfo.parents.len() != 0 {
@@ -164,16 +166,16 @@ impl TopologicalSorter {
             'outer: loop {
                 if seen.contains(&node) {
                     // If this node is in the current stack, we have a cycle
-                    if node2stackidx.contains_key(&node) {
-                        let start_idx = node2stackidx.get(&node).unwrap();
-                        let mut res = stack[*start_idx as usize..].to_vec();
+                    if node2stackid.contains_key(&node) {
+                        let start_id = node2stackid.get(&node).unwrap();
+                        let mut res = stack[*start_id as usize..].to_vec();
                         res.push(node);
                         return Some(res);
                     }
                 } else {
                     seen.insert(node);
                     itstack.push(self.parents.get(&node).unwrap().iter());
-                    node2stackidx.insert(node, stack.len() as u32);
+                    node2stackid.insert(node, stack.len() as u32);
                     stack.push(node);
                 }
                 // Backtrack to the topmost stack entry with at least 1 parent
@@ -186,7 +188,7 @@ impl TopologicalSorter {
                             break;
                         }
                         None => {
-                            node2stackidx.remove(&stack.pop().unwrap());
+                            node2stackid.remove(&stack.pop().unwrap());
                             itstack.pop();
                             continue;
                         }
@@ -217,7 +219,7 @@ impl TopologicalSorter {
             Some(cycle) => {
                 let maybe_items: PyResult<Vec<String>> = cycle
                     .iter()
-                    .map(|n| hashed_node_to_str(&self.idx2nodeinfo.get(&n).unwrap().node))
+                    .map(|n| hashed_node_to_str(&self.id2nodeinfo.get(&n).unwrap().node))
                     .collect();
                 let items = maybe_items?;
                 let items_str = items.clone().join(", ");
@@ -229,7 +231,7 @@ impl TopologicalSorter {
             None => (),
         }
         self.prepared = true;
-        for (&node, nodeinfo) in self.idx2nodeinfo.iter_mut() {
+        for (&node, nodeinfo) in self.id2nodeinfo.iter_mut() {
             if nodeinfo.npredecessors == 0 {
                 self.ready_nodes.push_back(node);
                 nodeinfo.state = NodeState::Ready;
@@ -238,17 +240,18 @@ impl TopologicalSorter {
         Ok(())
     }
     #[new]
-    fn new(graph: Option<&PyDict>) -> PyResult<Self> {
+    fn new(graph: Option<&PyDict>, node_id_factory: PyObject) -> PyResult<Self> {
         let mut this = TopologicalSorter {
-            idx2nodeinfo: IntMap::default(),
-            node2idx: HashMap::new(),
+            id2nodeinfo: IntMap::default(),
+            node2id: HashMap::new(),
             parents: IntMap::default(),
             children: IntMap::default(),
             ready_nodes: VecDeque::new(),
             n_passed_out: 0,
             n_finished: 0,
             prepared: false,
-            node_idx_counter: 0,
+            node_id_counter: 0,
+            node_id_factory: node_id_factory,
         };
         if !graph.is_none() {
             for (node, v) in graph.unwrap().iter() {
@@ -285,9 +288,9 @@ impl TopologicalSorter {
                         "prepare() must be called first",
                     ));
                 }
-                let mut nodeidx: u32;
+                let mut nodeid: u32;
                 for node in nodes {
-                    nodeidx = match self.node2idx.get(&node) {
+                    nodeid = match self.node2id.get(&node) {
                         Some(&v) => v,
                         None => {
                             return Err(PyValueError::new_err(format!(
@@ -296,7 +299,7 @@ impl TopologicalSorter {
                             )))
                         }
                     };
-                    self.mark_node_as_done(nodeidx, None)?;
+                    self.mark_node_as_done(nodeid, None)?;
                 }
                 Ok(())
             }
@@ -320,7 +323,7 @@ impl TopologicalSorter {
                 }
                 let mut ret: Vec<Py<PyAny>> = Vec::with_capacity(self.ready_nodes.len());
                 for node in &self.ready_nodes {
-                    ret.push(self.idx2nodeinfo.get(&node).unwrap().node.0.clone())
+                    ret.push(self.id2nodeinfo.get(&node).unwrap().node.0.clone())
                 }
                 self.n_passed_out += self.ready_nodes.len() as u32;
                 self.ready_nodes.clear();
@@ -340,7 +343,7 @@ impl TopologicalSorter {
             }
             node = queue.pop_front().unwrap();
             self.mark_node_as_done(node, Some(&mut queue))?;
-            out.push(self.idx2nodeinfo.get(&node).unwrap().node.0.clone());
+            out.push(self.id2nodeinfo.get(&node).unwrap().node.0.clone());
         }
         self.n_passed_out += out.len() as u32;
         Ok(out)

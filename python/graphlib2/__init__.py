@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import AbstractSet, Generic, Iterable, Optional, Protocol, Tuple, TypeVar
+from typing import AbstractSet, Callable, Generic, Iterable, Optional, Protocol, Tuple, TypeVar
 
 from .graphlib2 import CycleError
 from .graphlib2 import TopologicalSorter as _TopologicalSorter
@@ -16,11 +16,27 @@ class SupportsItems(Protocol[_KT_co, _VT_co]):
         ...
 
 
-class TopologicalSorter(Generic[_T]):
-    __slots__ = "_ts"
+class _DefaultNodeIdFactory:
+    __slots__ = ("current_count")
+    current_count: int
+    def __init__(self) -> None:
+        self.current_count = 0
+    def __call__(self) -> int:
+        res = self.current_count
+        self.current_count += 1
+        return res
 
-    def __init__(self, graph: Optional[SupportsItems[_T, Iterable[_T]]] = None) -> None:
-        self._ts: _TopologicalSorter[_T] = _TopologicalSorter(graph)
+
+class TopologicalSorter(Generic[_T]):
+    __slots__ = ("_ts", "_node_id_factory")
+
+    def __init__(
+        self,
+        graph: Optional[SupportsItems[_T, Iterable[_T]]] = None,
+        node_id_factory: Optional[Callable[[], int]] = None,
+    ) -> None:
+        node_id_factory = node_id_factory or _DefaultNodeIdFactory()
+        self._ts: _TopologicalSorter[_T] = _TopologicalSorter(graph, node_id_factory)
 
     def add(self, node: _T, *predecessors: _T) -> None:
         self._ts.add(node, predecessors)
@@ -43,8 +59,8 @@ class TopologicalSorter(Generic[_T]):
     def static_order(self) -> Iterable[Tuple[_T, ...]]:
         return self._ts.static_order()
 
-    def copy(self) -> TopologicalSorter[_T]:
-        new: TopologicalSorter[T] = object.__new__(TopologicalSorter)
+    def copy(self: TopologicalSorter[_T]) -> TopologicalSorter[_T]:
+        new: TopologicalSorter[_T] = object.__new__(TopologicalSorter)
         new._ts = self._ts.copy()
         return new
 

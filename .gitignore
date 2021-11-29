@@ -11,6 +11,6 @@
 !/requirements-dev.txt
 !/.pre-commit-config.yaml
 !/Makefile
-
+!/README.md
 
 __pycache__

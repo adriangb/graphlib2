@@ -4,6 +4,7 @@ PHONY: init build test
 	rm -rf venv
 	python -m venv venv
 	./venv/bin/pip install -r requirements-dev.txt
+	./venv/bin/pre-commit install
 	touch .init
 
 .clean:

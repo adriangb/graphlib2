@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::fmt;
-use std::hash::{BuildHasherDefault};
+use std::hash::BuildHasherDefault;
 
 use pyo3::create_exception;
 use pyo3::exceptions;
@@ -20,25 +20,6 @@ use crate::hashedany::HashedAny;
 create_exception!(graphlib2, CycleError, exceptions::PyValueError);
 
 
-type BuildSeaHasher = BuildHasherDefault<SeaHasher>;
-
-
-fn hashed_node_to_str(node: &HashedAny) -> PyResult<String> {
-    Python::with_gil(|py| -> PyResult<String> {
-        Ok(node.0.as_ref(py).repr()?.to_str()?.to_string())
-    })
-}
-
-
-// Use the result of calling repr() on the Python object as the debug string value
-impl fmt::Debug for HashedAny {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", hashed_node_to_str(self).unwrap())
-    }
-}
-
-
-
 #[derive(Debug, Clone, Copy)]
 enum NodeState {
     Active,
@@ -54,6 +35,11 @@ struct NodeInfo {
     npredecessors: u32,
 }
 
+// This is the main atastore for a graph
+// There are some notable differences between this version and the stdlib:
+// 1. We map all nodes to a u32 int so that all internal operations can be done faster and infalliably
+// 2. We store parents and children outside of NodeInfo so that we can borrow them as mutable seperately
+// Other than that, the algorithm and representation of the graph are very similar
 
 #[pyclass(module = "graphlib2",freelist=8)]
 #[derive(Clone)]
@@ -116,6 +102,8 @@ impl TopologicalSorter {
         Ok(())
     }
     fn new_node(&mut self, node: &HashedAny) -> u32 {
+        // Here we call back into Python to get a new node id
+        // This is slow, so it should only be done once
         let node_id = Python::with_gil(|py| -> u32 {
             u32::extract(self.node_id_factory.call0(py).unwrap().as_ref(py)).unwrap()
         });
@@ -153,6 +141,7 @@ impl TopologicalSorter {
         Ok(())
     }
     fn find_cycle(&self) -> Option<Vec<u32>> {
+        // Do a DFS with backtracking to find any cycles
         let mut seen: HashSet<u32> = HashSet::new();
         let mut stack = Vec::new();
         let mut itstack = Vec::new();
@@ -161,10 +150,6 @@ impl TopologicalSorter {
 
         for n in self.id2nodeinfo.keys() {
             node = *n;
-            // // Only begin exploring from root nodes
-            // if nodeinfo.parents.len() != 0 {
-            //     continue;
-            // }
             if seen.contains(&node) {
                 continue;
             }
@@ -210,10 +195,12 @@ impl TopologicalSorter {
 
 #[pymethods]
 impl TopologicalSorter {
+    // Add a new node to the graph
     fn add(&mut self, node: HashedAny, predecessors: Vec<HashedAny>) -> PyResult<()> {
         self.add_node(node, predecessors)?;
         Ok(())
     }
+    // Check for cycles and gather leafs
     fn prepare(&mut self) -> PyResult<()> {
         if self.prepared {
             return Err(exceptions::PyValueError::new_err(
@@ -282,10 +269,10 @@ impl TopologicalSorter {
     fn copy(&self) -> TopologicalSorter {
         self.clone()
     }
-    /// Returns any nodes with no dependencies after marking `node` as done
+    /// Mark nodes as done and possibly free up their dependants
     /// # Arguments
     ///
-    /// * `node` - A node in the graph
+    /// * `nodes` - Python objects representing nodes in the graph
     fn done(&mut self, nodes: Vec<HashedAny>, py: Python) -> PyResult<()> {
         py.allow_threads(|| 
             {
@@ -322,6 +309,7 @@ impl TopologicalSorter {
     /// Returns all nodes with no dependencies
     fn get_ready<'py>(&mut self, py: Python<'py>) -> PyResult<&'py PyTuple> {
         let ret = py.allow_threads(|| {
+                self.iterating = true;
                 if !self.prepared {
                     return Err(exceptions::PyValueError::new_err(
                         "prepare() must be called first",
@@ -360,6 +348,11 @@ impl TopologicalSorter {
         if !self.prepared {
             return Err(exceptions::PyValueError::new_err(
                 "prepare() must be called before remove_nodes()",
+            ));
+        }
+        if self.iterating {
+            return Err(exceptions::PyValueError::new_err(
+                "Cannot remove nodes after iteration has begun",
             ));
         }
         let mut queue: VecDeque<u32> = VecDeque::with_capacity(nodes.len());
@@ -430,4 +423,23 @@ fn graphlib2(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<TopologicalSorter>()?;
     m.add("CycleError", _py.get_type::<CycleError>())?;
     Ok(())
+}
+
+
+// Misc helper methods
+type BuildSeaHasher = BuildHasherDefault<SeaHasher>;
+
+
+fn hashed_node_to_str(node: &HashedAny) -> PyResult<String> {
+    Python::with_gil(|py| -> PyResult<String> {
+        Ok(node.0.as_ref(py).repr()?.to_str()?.to_string())
+    })
+}
+
+
+// Use the result of calling repr() on the Python object as the debug string value
+impl fmt::Debug for HashedAny {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", hashed_node_to_str(self).unwrap())
+    }
 }

@@ -27,7 +27,7 @@ impl cmp::PartialEq for HashedAny {
     fn eq(&self, other: &Self) -> bool {
         // This assumes that if self is other then self == other
         // Which is not necesarily true, e.g. for NaN, but is true in most cases
-        // and there's a perf advantage to not acquiring the GIL here
+        // and there's a perf advantage to not calling into Python
         if self.0.eq(&other.0) {
             return true;
         }

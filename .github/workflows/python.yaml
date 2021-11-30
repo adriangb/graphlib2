@@ -163,10 +163,11 @@ jobs:
       - uses: actions/download-artifact@v2
         with:
           name: wheels
+          path: wheels
       - name: Test
         run: |
           pip install -r requirements-dev.txt
-          pip install graphlib --no-index --find-links /wheels --force-reinstall
+          pip install graphlib --no-index --find-links ./wheels --force-reinstall
           python test_graphlib.py
   lint:
     runs-on: ubuntu-latest
@@ -180,10 +181,11 @@ jobs:
       - uses: actions/download-artifact@v2
         with:
           name: wheels
+          path: wheels
       - name: Lint
         run: |
           pip install -r requirements-dev.txt
-          pip install graphlib --no-index --find-links /wheels --force-reinstall
+          pip install graphlib --no-index --find-links ./wheels --force-reinstall
           pre-commit run --all-files
   release:
     name: Release

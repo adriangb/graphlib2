@@ -12,5 +12,6 @@
 !/.pre-commit-config.yaml
 !/Makefile
 !/README.md
+!/.github
 
 __pycache__

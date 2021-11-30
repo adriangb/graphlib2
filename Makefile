@@ -12,8 +12,14 @@ PHONY: init build test
 
 init: .clean .init
 
-build:
+build-develop:
 	. ./venv/bin/activate && maturin develop --release --strip
 
-test: build
+build-manylinux:
+	docker run --rm -v $$(pwd):/io konstin2/maturin build --release --manylinux 2014
+
+test: build-develop
 	./venv/bin/python test_graphlib.py
+
+lint: build-develop
+	./venv/bin/pre-commit run --all-files

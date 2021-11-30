@@ -53,9 +53,6 @@ class TopologicalSorter(Generic[_T]):
     def add(self, node: _T, *predecessors: _T) -> None:
         self._ts.add(node, predecessors)
 
-    def get_ids(self, *nodes: _T) -> Sequence[int]:
-        return self._ts.get_ids(nodes)
-
     def get_ready(self) -> Tuple[_T, ...]:
         return self._ts.get_ready()
 
@@ -75,6 +72,12 @@ class TopologicalSorter(Generic[_T]):
         new: TopologicalSorter[_T] = object.__new__(TopologicalSorter)
         new._ts = self._ts.copy()
         return new
+
+    def get_ids(self, *nodes: _T) -> Sequence[int]:
+        return self._ts.get_ids(nodes)
+
+    def done_by_id(self, *nodes: int) -> None:
+        self._ts.done_by_id(nodes)
 
     def remove_nodes(self, nodes: Iterable[_T]) -> None:
         self._ts.remove_nodes(nodes)

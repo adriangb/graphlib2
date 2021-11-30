@@ -145,7 +145,7 @@ jobs:
         path: dist
   test:
     runs-on: ${{ matrix.os }}
-    needs: [build-macos, build-windows, build-linux]
+    needs: [build-macos, build-windows, build-linux, build-linux-cross]
     strategy:
       fail-fast: false
       matrix:
@@ -167,11 +167,11 @@ jobs:
       - name: Test
         run: |
           pip install -r requirements-dev.txt
-          pip install graphlib2 --no-index --find-links ./wheels/ --force-reinstall
+          pip install graphlib2 --no-dependencies --no-index --find-links ./wheels/ --force-reinstall
           python test_graphlib.py
   lint:
     runs-on: ubuntu-latest
-    needs: [build-linux]
+    needs: [build-linux, build-linux-cross]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python
@@ -185,7 +185,7 @@ jobs:
       - name: Lint
         run: |
           pip install -r requirements-dev.txt
-          pip install graphlib2 --no-index --find-links ./wheels/ --force-reinstall
+          pip install graphlib2 --no-dependencies --no-index --find-links ./wheels/ --force-reinstall
           pre-commit run --all-files
   release:
     name: Release

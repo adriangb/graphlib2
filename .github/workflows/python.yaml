@@ -169,7 +169,7 @@ jobs:
           pip install -r requirements-dev.txt
           ls -a .
           ls -a ./wheels
-          pip install graphlib --no-index --find-links ./wheels --force-reinstall
+          pip install graphlib2 --no-index --find-links ./wheels/ --force-reinstall
           python test_graphlib.py
   lint:
     runs-on: ubuntu-latest
@@ -189,7 +189,7 @@ jobs:
           pip install -r requirements-dev.txt
           ls -a .
           ls -a ./wheels
-          pip install graphlib --no-index --find-links ./wheels --force-reinstall
+          pip install graphlib2 --no-index --find-links ./wheels/ --force-reinstall
           pre-commit run --all-files
   release:
     name: Release

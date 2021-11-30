@@ -197,9 +197,9 @@ jobs:
           name: wheels
       - name: Test
         run: |
-        pip install -r requirements-dev.txt
-        pip install graphlib --no-index --find-links /wheels --force-reinstall
-        python test_graphlib.py
+          pip install -r requirements-dev.txt
+          pip install graphlib --no-index --find-links /wheels --force-reinstall
+          python test_graphlib.py
   release:
     name: Release
     runs-on: ubuntu-latest

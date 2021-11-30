@@ -170,6 +170,7 @@ jobs:
           python test_graphlib.py
   lint:
     runs-on: ubuntu-latest
+    needs: [build-macos, build-windows, build-linux, build-linux-cross]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python
@@ -187,6 +188,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' }}
     needs: [build-macos, build-windows, build-linux, build-linux-cross, test, lint]
     steps:
       - uses: actions/download-artifact@v2

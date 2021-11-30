@@ -1,5 +1,4 @@
 matplotlib
-networkx
 jupyter
 pytest
 pre-commit

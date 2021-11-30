@@ -155,14 +155,14 @@ impl TopologicalSorter {
                     // If this node is in the current stack, we have a cycle
                     if node2stackid.contains_key(&node) {
                         let start_id = node2stackid.get(&node).unwrap();
-                        let mut res = stack[*start_id as usize..].to_vec();
+                        let mut res = stack[*start_id..].to_vec();
                         res.push(node);
                         return Some(res);
                     }
                 } else {
                     seen.insert(node);
                     itstack.push(self.parents.get(&node).unwrap().iter());
-                    node2stackid.insert(node, stack.len() as u32);
+                    node2stackid.insert(node, stack.len());
                     stack.push(node);
                 }
                 // Backtrack to the topmost stack entry with at least 1 parent

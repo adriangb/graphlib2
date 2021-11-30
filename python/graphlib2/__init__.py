@@ -64,7 +64,7 @@ class TopologicalSorter(Generic[_T]):
     def prepare(self) -> None:
         self._ts.prepare()
 
-    def static_order(self) -> Iterable[Tuple[_T, ...]]:
+    def static_order(self) -> Iterable[_T]:
         return self._ts.static_order()
 
     def copy(self: TopologicalSorter[_T]) -> TopologicalSorter[_T]:

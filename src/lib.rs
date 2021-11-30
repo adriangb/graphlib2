@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::fmt;
 use std::hash::BuildHasherDefault;
+use std::iter::FromIterator;
 
 use nohash_hasher::{IntMap, IntSet};
 use pyo3::create_exception;
@@ -103,7 +104,13 @@ impl TopologicalSorter {
         // Here we call back into Python to get a new node id
         // This is slow, so it should only be done once
         let node_id = Python::with_gil(|py| -> u32 {
-            u32::extract(self.node_id_factory.call0(py).unwrap().as_ref(py)).unwrap()
+            u32::extract(
+                self.node_id_factory
+                    .call1(py, (node.0.clone(),))
+                    .unwrap()
+                    .as_ref(py),
+            )
+            .unwrap()
         });
         let nodeinfo = NodeInfo {
             node: node.clone(),
@@ -188,14 +195,79 @@ impl TopologicalSorter {
         }
         None
     }
+    fn remove_nodes_from_queue(&mut self, mut queue: VecDeque<u32>, py: Python) -> PyResult<()> {
+        py.allow_threads(|| {
+            if !self.prepared {
+                return Err(exceptions::PyValueError::new_err(
+                    "prepare() must be called before remove_nodes()",
+                ));
+            }
+            if self.iterating {
+                return Err(exceptions::PyValueError::new_err(
+                    "Cannot remove nodes after iteration has begun",
+                ));
+            }
+            let mut node: u32;
+            let mut maybe_ready_nodes: HashSet<u32, BuildSeaHasher> =
+                HashSet::with_capacity_and_hasher(
+                    self.ready_nodes.len(),
+                    BuildSeaHasher::default(),
+                );
+            for node in &self.ready_nodes {
+                maybe_ready_nodes.insert(*node);
+            }
+            loop {
+                if queue.is_empty() {
+                    break;
+                }
+                node = queue.pop_front().unwrap();
+                maybe_ready_nodes.remove(&node);
+                match self.id2nodeinfo.remove(&node) {
+                    Some(_) => (),
+                    None => continue, // node was already removed
+                }
+                for child in self.children.remove(&node).unwrap() {
+                    queue.push_back(child)
+                }
+                for parent in self.parents.remove(&node).unwrap() {
+                    if let Some(mut parent_nodeinfo) = self.id2nodeinfo.get_mut(&parent) {
+                        parent_nodeinfo.npredecessors -= 1;
+                        if parent_nodeinfo.npredecessors == 0 {
+                            maybe_ready_nodes.insert(parent);
+                        }
+                        self.children.get_mut(&parent).unwrap().remove(&node);
+                    }
+                }
+            }
+            self.ready_nodes.clear();
+            let mut node_info;
+            for node in maybe_ready_nodes {
+                node_info = self.id2nodeinfo.get_mut(&node).unwrap();
+                if node_info.npredecessors == 0 {
+                    self.ready_nodes.push_back(node);
+                    node_info.state = NodeState::Ready;
+                }
+            }
+            Ok(())
+        })
+    }
 }
 
 #[pymethods]
 impl TopologicalSorter {
     // Add a new node to the graph
     fn add(&mut self, node: HashedAny, predecessors: Vec<HashedAny>) -> PyResult<()> {
-        self.add_node(node, predecessors)?;
-        Ok(())
+        Ok(self.add_node(node, predecessors)?)
+    }
+    fn get_ids(&self, nodes: Vec<HashedAny>) -> PyResult<Vec<u32>> {
+        let mut res = Vec::new();
+        for node in nodes {
+            match self.node2id.get(&node) {
+                Some(&v) => res.push(v),
+                None => return Err(PyValueError::new_err("Node {:?} was not added using add()")),
+            }
+        }
+        Ok(res)
     }
     // Check for cycles and gather leafs
     fn prepare(&mut self) -> PyResult<()> {
@@ -262,6 +334,22 @@ impl TopologicalSorter {
     /// Returns a deep copy of this graph
     fn copy(&self) -> TopologicalSorter {
         self.clone()
+    }
+    fn done_by_id(&mut self, nodes: Vec<u32>, py: Python) -> PyResult<()> {
+        if !self.prepared {
+            return Err(exceptions::PyValueError::new_err(
+                "prepare() must be called first",
+            ));
+        }
+        py.allow_threads(|| -> PyResult<()> {
+            for node_id in nodes {
+                if let Err(e) = self.mark_node_as_done(node_id, None) {
+                    return Err(e);
+                }
+            }
+            Ok(())
+        })?;
+        Ok(())
     }
     /// Mark nodes as done and possibly free up their dependants
     /// # Arguments
@@ -345,19 +433,7 @@ impl TopologicalSorter {
         Ok(out)
     }
     fn remove_nodes(&mut self, nodes: Vec<HashedAny>, py: Python) -> PyResult<()> {
-        if !self.prepared {
-            return Err(exceptions::PyValueError::new_err(
-                "prepare() must be called before remove_nodes()",
-            ));
-        }
-        if self.iterating {
-            return Err(exceptions::PyValueError::new_err(
-                "Cannot remove nodes after iteration has begun",
-            ));
-        }
         let mut queue: VecDeque<u32> = VecDeque::with_capacity(nodes.len());
-        // We need to do this part while we still have the GIL to avoid
-        // constantly re-acquiring it to call __eq__
         for node in nodes {
             match self.node2id.get(&node) {
                 Some(v) => queue.push_back(*v),
@@ -369,50 +445,10 @@ impl TopologicalSorter {
                 }
             }
         }
-        py.allow_threads(|| {
-            let mut node: u32;
-            let mut maybe_ready_nodes: HashSet<u32, BuildSeaHasher> =
-                HashSet::with_capacity_and_hasher(
-                    self.ready_nodes.len(),
-                    BuildSeaHasher::default(),
-                );
-            for node in &self.ready_nodes {
-                maybe_ready_nodes.insert(*node);
-            }
-            loop {
-                if queue.is_empty() {
-                    break;
-                }
-                node = queue.pop_front().unwrap();
-                maybe_ready_nodes.remove(&node);
-                match self.id2nodeinfo.remove(&node) {
-                    Some(_) => (),
-                    None => continue, // node was already removed
-                }
-                for child in self.children.remove(&node).unwrap() {
-                    queue.push_back(child)
-                }
-                for parent in self.parents.remove(&node).unwrap() {
-                    if let Some(mut parent_nodeinfo) = self.id2nodeinfo.get_mut(&parent) {
-                        parent_nodeinfo.npredecessors -= 1;
-                        if parent_nodeinfo.npredecessors == 0 {
-                            maybe_ready_nodes.insert(parent);
-                        }
-                        self.children.get_mut(&parent).unwrap().remove(&node);
-                    }
-                }
-            }
-            self.ready_nodes.clear();
-            let mut node_info;
-            for node in maybe_ready_nodes {
-                node_info = self.id2nodeinfo.get_mut(&node).unwrap();
-                if node_info.npredecessors == 0 {
-                    self.ready_nodes.push_back(node);
-                    node_info.state = NodeState::Ready;
-                }
-            }
-            Ok(())
-        })
+        Ok(self.remove_nodes_from_queue(queue, py)?)
+    }
+    fn remove_nodes_by_id(&mut self, nodes: Vec<u32>, py: Python) -> PyResult<()> {
+        Ok(self.remove_nodes_from_queue(VecDeque::from_iter(nodes), py)?)
     }
 }
 

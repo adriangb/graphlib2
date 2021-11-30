@@ -1,29 +1,12 @@
 from __future__ import annotations
 
-from typing import (
-    AbstractSet,
-    Any,
-    Callable,
-    Generic,
-    Iterable,
-    Optional,
-    Protocol,
-    Sequence,
-    Tuple,
-    TypeVar,
-)
+from typing import Any, Callable, Generic, Iterable, Optional, Sequence, Tuple, TypeVar
 
-from .graphlib2 import CycleError
-from .graphlib2 import TopologicalSorter as _TopologicalSorter
+from graphlib2._types import SupportsItems
+from graphlib2.graphlib2 import CycleError
+from graphlib2.graphlib2 import TopologicalSorter as _TopologicalSorter
 
-_KT_co = TypeVar("_KT_co", covariant=True)
-_VT_co = TypeVar("_VT_co", covariant=True)
 _T = TypeVar("_T")
-
-
-class SupportsItems(Protocol[_KT_co, _VT_co]):
-    def items(self) -> AbstractSet[Tuple[_KT_co, _VT_co]]:
-        ...
 
 
 class _DefaultNodeIdFactory:

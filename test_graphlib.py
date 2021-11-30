@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, Collection, Dict, Generator, Hashable, Iterable, List, Sequence, Set, TypeVar, Protocol
-
+from typing import Any, Collection, Dict, Generator, Hashable, Iterable, List, Sequence, Set, TypeVar
+from typing_extensions import Protocol
 
 import graphlib2 as graphlib
 import pytest

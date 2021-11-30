@@ -2,13 +2,9 @@ from __future__ import annotations
 
 from typing import *
 
+from graphlib2._types import SupportsItems
+
 T = TypeVar("T")
-
-_KT_co = TypeVar("_KT_co", covariant=True)
-_VT_co = TypeVar("_VT_co", covariant=True)
-
-class SupportsItems(Protocol[_KT_co, _VT_co]):
-    def items(self) -> AbstractSet[Tuple[_KT_co, _VT_co]]: ...
 
 class CycleError(ValueError):
     pass

@@ -4,3 +4,4 @@ pytest
 pre-commit
 maturin
 igraph
+typing-extensions>=3; python_version < '3.8'

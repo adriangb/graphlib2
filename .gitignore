@@ -13,5 +13,6 @@
 !/Makefile
 !/README.md
 !/.github
+!/LICENSE.txt
 
 __pycache__

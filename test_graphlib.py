@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import itertools
 from typing import Any, Collection, Dict, Generator, Hashable, Iterable, List, Sequence, Set, TypeVar
-from typing_extensions import Protocol
+import sys
+if sys.version_info < (3, 8):
+    from typing_extensions import Protocol
+else:
+    from typing import Protocol
 
 import graphlib2 as graphlib
 import pytest

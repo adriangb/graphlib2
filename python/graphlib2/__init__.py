@@ -76,10 +76,10 @@ class TopologicalSorter(Generic[_T]):
         new._ts = self._ts.copy()
         return new
 
-    def remove_nodes(self, nodes: Sequence[_T]) -> None:
+    def remove_nodes(self, nodes: Iterable[_T]) -> None:
         self._ts.remove_nodes(nodes)
 
-    def remove_nodes_by_id(self, nodes: Sequence[int]) -> None:
+    def remove_nodes_by_id(self, nodes: Iterable[int]) -> None:
         self._ts.remove_nodes_by_id(nodes)
 
 

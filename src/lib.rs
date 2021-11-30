@@ -3,7 +3,6 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::fmt;
 use std::hash::BuildHasherDefault;
-use std::iter::FromIterator;
 
 use nohash_hasher::{IntMap, IntSet};
 use pyo3::create_exception;
@@ -355,7 +354,7 @@ impl TopologicalSorter {
     /// # Arguments
     ///
     /// * `nodes` - Python objects representing nodes in the graph
-    fn done(&mut self, nodes: Vec<HashedAny>, py: Python) -> PyResult<()> {
+    fn done(&mut self, nodes: &PyTuple, py: Python) -> PyResult<()> {
         let mut node_ids = Vec::new();
         if !self.prepared {
             return Err(exceptions::PyValueError::new_err(
@@ -365,13 +364,15 @@ impl TopologicalSorter {
         let mut node_id: u32;
         // Run this loop before marking as done so that we avoid
         // acquiring the GIL in a loop
+        let mut hashed_node;
         for node in nodes {
-            node_id = match self.node2id.get(&node) {
+            hashed_node = HashedAny::extract(node)?;
+            node_id = match self.node2id.get(&hashed_node) {
                 Some(&v) => v,
                 None => {
                     return Err(PyValueError::new_err(format!(
                         "node {} was not added using add()",
-                        hashed_node_to_str(&node)?
+                        hashed_node_to_str(&hashed_node)?
                     )))
                 }
             };
@@ -432,23 +433,28 @@ impl TopologicalSorter {
         self.ready_nodes.clear();
         Ok(out)
     }
-    fn remove_nodes(&mut self, nodes: Vec<HashedAny>, py: Python) -> PyResult<()> {
-        let mut queue: VecDeque<u32> = VecDeque::with_capacity(nodes.len());
-        for node in nodes {
-            match self.node2id.get(&node) {
+    fn remove_nodes(&mut self, nodes: &PyAny, py: Python) -> PyResult<()> {
+        let mut queue: VecDeque<u32> = VecDeque::new();
+        for node in nodes.iter()? {
+            let hashed_node = &HashedAny::extract(node?)?;
+            match self.node2id.get(&hashed_node) {
                 Some(v) => queue.push_back(*v),
                 None => {
                     return Err(PyValueError::new_err(format!(
                         "The node {:?} was not added using add()",
-                        node
+                        hashed_node.0
                     )))
                 }
             }
         }
         Ok(self.remove_nodes_from_queue(queue, py)?)
     }
-    fn remove_nodes_by_id(&mut self, nodes: Vec<u32>, py: Python) -> PyResult<()> {
-        Ok(self.remove_nodes_from_queue(VecDeque::from_iter(nodes), py)?)
+    fn remove_nodes_by_id(&mut self, nodes: &PyAny, py: Python) -> PyResult<()> {
+        let mut q = VecDeque::new();
+        for node in nodes.iter()? {
+            q.push_back(u32::extract(node?)?)
+        }
+        Ok(self.remove_nodes_from_queue(q, py)?)
     }
 }
 

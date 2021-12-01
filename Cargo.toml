@@ -1,6 +1,6 @@
 [package]
 name = "graphlib2"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2018"
 description = "Rust port of the Python stdlib graphlib modules"
 readme = "README.md"
@@ -19,7 +19,6 @@ version = "0.15.1"
 
 [dependencies]
 nohash-hasher = "0.2.0"
-seahash = "4.1.0"
 
 [package.metadata.maturin]
 python-source = "python"

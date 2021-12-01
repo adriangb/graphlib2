@@ -19,7 +19,7 @@ impl<'source> FromPyObject<'source> for HashedAny {
 
 impl hash::Hash for HashedAny {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.1.hash(state)
+        state.write_isize(self.1)
     }
 }
 

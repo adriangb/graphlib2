@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Any, Collection, Dict, Generator, Hashable, Iterable, List, Sequence, Set, TypeVar
+from typing import Any, Collection, Dict, Generator, Hashable, Iterable, Sequence, Set, TypeVar
 import sys
 if sys.version_info < (3, 8):
     from typing_extensions import Protocol
@@ -302,57 +302,6 @@ def test_order_of_insertion_does_not_matter_between_groups():
     ts2.add(4, 5)
 
     assert list(get_groups(ts)) == list(get_groups(ts2))
-
-
-@pytest.mark.parametrize(
-    "graph,removed,expected", [
-        (
-            {0: [1, 2], 1: [], 2: [3]},
-            [],
-            [(3,1), (2,), (0,)],
-        ),
-        (
-            {0: [1, 2], 1: [], 2: [3]},
-            [2],
-            [(1,), (0,)],
-        ),
-        (
-            {0: [1, 2], 1: [], 2: [3]},
-            [1],
-            [(3,), (2,), (0,)],
-        ),
-    ]
-)
-def test_remove_nodes(
-    graph: Dict[int, Iterable[int]],
-    removed: List[int],
-    expected: Iterable[Collection[int]],
-):
-    ts = graphlib.TopologicalSorter(graph)
-    ts.prepare()
-    ts.remove_nodes(removed)
-    assert list(get_static_order_from_groups(ts)) == [set(e) for e in expected]
-
-
-def test_remove_root_node():
-    graph = {0: [1]}
-    ts = graphlib.TopologicalSorter(graph)
-    ts.prepare()
-    ts.remove_nodes([0])
-    assert not ts.is_active()
-    assert ts.get_ready() == ()
-
-
-def test_remove_after_copy():
-    graph = {0: [1]}
-    ts = graphlib.TopologicalSorter(graph)
-    ts.prepare()
-    ts2 = ts.copy()
-    ts2.remove_nodes([1])
-    assert ts.is_active()
-    assert ts.get_ready() == (1,)
-    assert ts2.is_active()
-    assert ts2.get_ready() == (0,)
 
 
 def test_execute_after_copy():

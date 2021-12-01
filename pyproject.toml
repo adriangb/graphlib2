@@ -6,9 +6,8 @@ description = "Rust port of the Python stdlib graphlib modules"
 authors = [
     {name = "Adrian Garcia Badaracco"}
 ]
-readme = { file = "README.md" }
 documentation = "https://github.com/adriangb/README.md"
-license = {file = "LICENSE.txt"}
+license = { text = "MIT" }
 classifiers=[
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

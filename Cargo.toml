@@ -2,6 +2,8 @@
 name = "graphlib2"
 version = "0.1.1"
 edition = "2018"
+description = "Rust port of the Python stdlib graphlib modules"
+readme = "README.md"
 
 [lib]
 name = "graphlib2"
@@ -20,3 +22,4 @@ seahash = "4.1.0"
 
 [package.metadata.maturin]
 python-source = "python"
+description-content-type = "text/markdown; charset=UTF-8; variant=GFM"

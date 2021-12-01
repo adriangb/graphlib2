@@ -255,7 +255,7 @@ impl TopologicalSorter {
 impl TopologicalSorter {
     // Add a new node to the graph
     fn add(&mut self, node: HashedAny, predecessors: Vec<HashedAny>) -> PyResult<()> {
-        Ok(self.add_node(node, predecessors)?)
+        self.add_node(node, predecessors)
     }
     fn get_ids(&self, nodes: Vec<HashedAny>) -> PyResult<Vec<u32>> {
         let mut res = Vec::new();
@@ -434,7 +434,7 @@ impl TopologicalSorter {
         let mut queue: VecDeque<u32> = VecDeque::new();
         for node in nodes.iter()? {
             let hashed_node = &HashedAny::extract(node?)?;
-            match self.node2id.get(&hashed_node) {
+            match self.node2id.get(hashed_node) {
                 Some(v) => queue.push_back(*v),
                 None => {
                     return Err(PyValueError::new_err(format!(
@@ -444,14 +444,14 @@ impl TopologicalSorter {
                 }
             }
         }
-        Ok(self.remove_nodes_from_queue(queue, py)?)
+        self.remove_nodes_from_queue(queue, py)
     }
     fn remove_nodes_by_id(&mut self, nodes: &PyAny, py: Python) -> PyResult<()> {
         let mut q = VecDeque::new();
         for node in nodes.iter()? {
             q.push_back(u32::extract(node?)?)
         }
-        Ok(self.remove_nodes_from_queue(q, py)?)
+        self.remove_nodes_from_queue(q, py)
     }
 }
 

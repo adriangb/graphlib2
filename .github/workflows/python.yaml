@@ -182,7 +182,6 @@ jobs:
         run: |
           python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BEFORE_ALL_LINUX: "yum install -y wget && {package}/tools/install_rust.sh"
           CIBW_SKIP: cp39-* cp310-* pp* *win32
           CIBW_ARCHS_LINUX: s390x
       - uses: actions/upload-artifact@v2

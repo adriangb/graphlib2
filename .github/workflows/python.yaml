@@ -189,7 +189,7 @@ jobs:
           name: dist
           path: ./wheelhouse/*.whl
   build_wheels_s390x_part2:
-    name: Build wheels on ${{ matrix.os }}
+    name: Build s390x wheels on ubuntu-latest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -218,7 +218,7 @@ jobs:
           name: dist
           path: ./wheelhouse/*.whl
   build-mac-arm-wheels:
-    name: Build wheels on macos for arm and universal2
+    name: Build arm and universal2 wheels on macos-latest
     runs-on: macos-10.15
     steps:
       - uses: actions/checkout@v2

@@ -10,8 +10,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-macos:
-    runs-on: macos-latest
+  build-wheels:
+    name: Build & Test
+    runs-on: ${{ matrix.os }}
+    matrix:
+      os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -24,174 +27,34 @@ jobs:
           toolchain: stable
           profile: minimal
           default: true
-      - name: Build wheels - x86_64
-        uses: messense/maturin-action@v1
+      - name: Set up QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v1
         with:
-          target: x86_64
-          args: --release --out dist
-      - name: Install built wheel - x86_64
-        run: |
-          pip install graphlib2 --no-index --find-links dist --force-reinstall
-          python -c "import graphlib2"
-      - name: Build wheels - universal2
-        uses: messense/maturin-action@v1
-        with:
-          args: --release --universal2 --out dist --no-sdist
-      - name: Install built wheel - universal2
-        run: |
-          pip install graphlib2 --no-index --find-links dist --force-reinstall
-          python -c "import graphlib2"
-      - name: Upload wheels
-        uses: actions/upload-artifact@v2
-        with:
-          name: wheels
-          path: dist
-  build-windows:
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        target: [x64, x86]
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-        with:
-          python-version: "3.x"
-          architecture: ${{ matrix.target }}
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          default: true
+          platforms: all
       - name: Build wheels
-        uses: messense/maturin-action@v1
-        with:
-          target: ${{ matrix.target }}
-          args: --release --out dist --no-sdist
-      - name: Install built wheel
-        run: |
-          pip install graphlib2 --no-index --find-links dist --force-reinstall
-          python -c "import graphlib2"
+        uses: pypa/cibuildwheel@v2.3.0
+        env:
+          CIBW_BEFORE_TEST: "pip install -r requirements-dev.txt"
+          CIBW_TEST_COMMAND: "pre-commit run --all-files && pytest {project}/test_graphlib.py"
+          # On an Linux Intel runner with qemu installed, build Intel and ARM wheels
+          # Note that we will only test the native wheels
+          CIBW_ARCHS_LINUX: "auto aarch64 ppc64le s390x"
+          # Build `universal2` and `arm64` wheels on an Intel runner.
+          # Note that the `arm64` wheel and the `arm64` part of the `universal2`
+          # wheel cannot be tested in this configuration.
+          CIBW_ARCHS_MACOS: "x86_64 arm64 universal2"
+          CIBW_TEST_SKIP: "*-*linux_{aarch64,ppc64le,s390x} *-macosx_arm64 *-macosx_universal2:arm64"
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
           name: wheels
-          path: dist
-  build-linux:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target: [x86_64, i686]
-    steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
-      with:
-        python-version: "3.x"
-        architecture: x64
-    - name: Build Wheels
-      uses: messense/maturin-action@v1
-      with:
-        target: ${{ matrix.target }}
-        manylinux: auto
-        args: --release --out dist --no-sdist
-    - name: Install built wheel
-      if: matrix.target == 'x86_64'
-      run: |
-        pip install graphlib2 --no-index --find-links dist --force-reinstall
-        python -c "import graphlib2"
-    - name: Upload wheels
-      uses: actions/upload-artifact@v2
-      with:
-        name: wheels
-        path: dist
-  build-linux-cross:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target: [aarch64, armv7, s390x, ppc64le, ppc64]
-    steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
-      with:
-        python-version: "3.x"
-    - name: Build Wheels
-      uses: messense/maturin-action@v1
-      with:
-        target: ${{ matrix.target }}
-        manylinux: auto
-        args: --release --out dist --no-sdist
-    - uses: uraimo/run-on-arch-action@v2.1.1
-      if: matrix.target != 'ppc64'
-      name: Install built wheel
-      with:
-        arch: ${{ matrix.target }}
-        distro: ubuntu20.04
-        githubToken: ${{ github.token }}
-        # Mount the dist directory as /artifacts in the container
-        dockerRunArgs: |
-          --volume "${PWD}/dist:/artifacts"
-        install: |
-          apt-get update
-          apt-get install -y --no-install-recommends python3 python3-pip
-          pip3 install -U pip
-        run: |
-          ls -lrth /artifacts
-          pip3 install graphlib2 --no-index --find-links /artifacts --force-reinstall
-          python3 -c "import graphlib2"
-    - name: Upload wheels
-      uses: actions/upload-artifact@v2
-      with:
-        name: wheels
-        path: dist
-  test:
-    runs-on: ${{ matrix.os }}
-    needs: [build-macos, build-windows, build-linux, build-linux-cross]
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.7", "3.8", "3.9", "3.10"]
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
-      - uses: actions/download-artifact@v2
-        with:
-          name: wheels
-          path: ./wheels
-      - name: Test
-        run: |
-          pip install -r requirements-dev.txt
-          pip install graphlib2 --no-dependencies --no-index --find-links ./wheels/ --force-reinstall
-          python test_graphlib.py
-  lint:
-    runs-on: ubuntu-latest
-    needs: [build-linux, build-linux-cross]
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.x'
-      - uses: actions/download-artifact@v2
-        with:
-          name: wheels
-          path: ./wheels
-      - name: Lint
-        run: |
-          pip install -r requirements-dev.txt
-          pip install graphlib2 --no-dependencies --no-index --find-links ./wheels/ --force-reinstall
-          pre-commit run --all-files
+          path: wheelhouse
   release:
     name: Release
     runs-on: ubuntu-latest
     if: ${{ github.ref == 'refs/heads/main' }}
-    needs: [build-macos, build-windows, build-linux, build-linux-cross, test, lint]
+    needs: [build-wheels]
     steps:
       - uses: actions/download-artifact@v2
         with:

@@ -42,7 +42,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.3.0
         env:
           CIBW_BEFORE_TEST: "pip install -r requirements-dev.txt"
-          CIBW_TEST_COMMAND: "pre-commit run --all-files && pytest {project}/test_graphlib.py"
+          CIBW_TEST_COMMAND: "pytest {project}/test_graphlib.py"
           CIBW_BEFORE_ALL_LINUX: "curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable"
           CIBW_ENVIRONMENT: 'PATH="$PATH:$HOME/.cargo/bin"'
           # On an Linux Intel runner with qemu installed, build Intel and ARM wheels
@@ -75,6 +75,23 @@ jobs:
           name: dist
           path: dist/*.tar.gz
           if-no-files-found: error
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - uses: actions/download-artifact@v2
+        with:
+          name: dist
+          path: ./dist
+      - name: Lint
+        run: |
+          pip install -r requirements-dev.txt
+          pip install graphlib2 --no-dependencies --no-index --find-links dist --force-reinstall
+          pre-commit run --all-files
   release:
     name: Release
     runs-on: ubuntu-latest

@@ -96,8 +96,6 @@ impl TopologicalSorter {
         Ok(())
     }
     fn new_node(&mut self, node: &HashedAny) -> usize {
-        // Here we call back into Python to get a new node id
-        // This is slow, so it should only be done once
         let node_id = self.node2id.len();
         let nodeinfo = NodeInfo {
             node: node.clone(),

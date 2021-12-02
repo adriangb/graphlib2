@@ -278,7 +278,10 @@ jobs:
           profile: minimal
           default: true
       - name: Lint
-        run: make lint
+        run: |
+          python -m venv venv
+          . ./venv/bin/python -m pip install -r requirements-dev.txt
+          make lint
   release:
     name: Release
     runs-on: ubuntu-latest

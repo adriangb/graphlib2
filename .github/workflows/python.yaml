@@ -43,7 +43,7 @@ jobs:
         env:
           CIBW_BEFORE_TEST: "pip install -r requirements-dev.txt"
           CIBW_TEST_COMMAND: "pre-commit run --all-files && pytest {project}/test_graphlib.py"
-          CIBW_BEFORE_ALL_LINUX: "curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable"
+          CIBW_BEFORE_ALL_LINUX: "curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable && source $HOME/.cargo/env"
           # On an Linux Intel runner with qemu installed, build Intel and ARM wheels
           # Note that we will only test the native wheels
           CIBW_ARCHS_LINUX: "auto aarch64 ppc64le s390x"

@@ -1,5 +1,4 @@
+-r requirements-dev.txt
 matplotlib==3.5.0
 jupyter==1.0.0
-pre-commit==2.16.0
-maturin==0.12.3
 igraph==0.9.8

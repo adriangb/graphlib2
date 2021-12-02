@@ -52,6 +52,9 @@ jobs:
           # Note that the `arm64` wheel and the `arm64` part of the `universal2`
           # wheel cannot be tested in this configuration.
           CIBW_ARCHS_MACOS: "x86_64 arm64 universal2"
+          # Skip PyPy since we need to make Rust -> Python calls which is
+          # not supported by PyO3 on PyPy
+          CIBW_SKIP: pp*
           CIBW_TEST_SKIP: "*-*linux_{aarch64,ppc64le,s390x} *-macosx_arm64 *-macosx_universal2:arm64"
       - name: Upload wheels
         uses: actions/upload-artifact@v2

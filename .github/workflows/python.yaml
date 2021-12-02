@@ -278,8 +278,6 @@ jobs:
           default: true
       - name: Lint
         run: |
-          python -m venv venv
-          . ./venv/bin/python -m pip install -r requirements-dev.txt
           make lint
   release:
     name: Release

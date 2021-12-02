@@ -12,7 +12,7 @@ PHONY: init build test
 
 init: .clean .init
 
-build-develop:
+build-develop: .init
 	. ./venv/bin/activate && maturin develop --release --strip
 
 build-manylinux:

@@ -24,8 +24,11 @@ jobs:
         with:
           python-version: "3.x"
           architecture: x64
+      # Rust toolchain is not needed on Linux
+      # since it gets installed inside of the Docker container
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
+        if: runner.os != 'Linux'
         with:
           toolchain: stable
           profile: minimal
@@ -40,6 +43,7 @@ jobs:
         env:
           CIBW_BEFORE_TEST: "pip install -r requirements-dev.txt"
           CIBW_TEST_COMMAND: "pre-commit run --all-files && pytest {project}/test_graphlib.py"
+          CIBW_BEFORE_ALL_LINUX: "curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain stable"
           # On an Linux Intel runner with qemu installed, build Intel and ARM wheels
           # Note that we will only test the native wheels
           CIBW_ARCHS_LINUX: "auto aarch64 ppc64le s390x"
@@ -52,7 +56,21 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: wheels
-          path: wheelhouse
+          path: wheelhouse/*.whl
+  build_sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        name: Install Python
+      - name: Build sdist
+        run: |
+          pip install -r requirements-dev.txt
+          maturin build --out dis
+      - uses: actions/upload-artifact@v2
+        with:
+          path: dist/*.tar.gz
   release:
     name: Release
     runs-on: ubuntu-latest

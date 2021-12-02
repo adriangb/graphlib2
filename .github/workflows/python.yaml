@@ -67,7 +67,7 @@ jobs:
       - name: Build sdist
         run: |
           pip install -r requirements-dev.txt
-          maturin build --out dis
+          maturin build --out dist
       - uses: actions/upload-artifact@v2
         with:
           path: dist/*.tar.gz

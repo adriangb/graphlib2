@@ -8,7 +8,8 @@
 !/python
 !/test_graphlib.py
 !/bench.ipynb
-!/requirements-dev.txt
+!/requirements-test.txt
+!/requirements-bench.txt
 !/.pre-commit-config.yaml
 !/Makefile
 !/README.md

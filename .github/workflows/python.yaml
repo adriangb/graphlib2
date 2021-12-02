@@ -77,21 +77,22 @@ jobs:
           if-no-files-found: error
   lint:
     runs-on: ubuntu-latest
+    needs: ["build-wheels"]
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: '3.x'
-      - uses: actions/download-artifact@v2
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        if: runner.os != 'Linux'
         with:
-          name: dist
-          path: ./dist
+          toolchain: stable
+          profile: minimal
+          default: true
       - name: Lint
-        run: |
-          pip install -r requirements-dev.txt
-          pip install graphlib2 --no-dependencies --no-index --find-links dist --force-reinstall
-          pre-commit run --all-files
+        run: make lint
   release:
     name: Release
     runs-on: ubuntu-latest

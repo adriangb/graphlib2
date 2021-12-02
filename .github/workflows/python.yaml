@@ -162,6 +162,7 @@ jobs:
           path: ./wheelhouse/*.whl
   build_wheels_s390x:
     name: Build s390x wheels on ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -191,11 +192,7 @@ jobs:
           path: ./wheelhouse/*.whl
   build_wheels_s390x_part2:
     name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2

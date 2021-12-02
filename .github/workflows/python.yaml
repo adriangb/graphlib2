@@ -8,8 +8,7 @@ on:
 
 
 env:
-  CIBW_BEFORE_ALL_LINUX: "yum install -y curl && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
-  CIBW_BEFORE_ALL_MACOS:
+  CIBW_BEFORE_ALL_LINUX: "yum install -y curl && curl -sSf https://sh.rustup.rs | sh -s -- -y"
   CIBW_ENVIRONMENT_LINUX: 'PATH="$PATH:$HOME/.cargo/bin"'
   CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux2010_x86_64:latest
   CIBW_MANYLINUX_I686_IMAGE: quay.io/pypa/manylinux2010_i686:latest

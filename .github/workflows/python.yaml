@@ -57,14 +57,15 @@ jobs:
         run: |
           python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BEFORE_ALL: pip install -r requirements-dev.txt
-          CIBW_TEST_COMMAND: pytest {project}/test_graphlib.py
+          CIBW_BEFORE_ALL: "pip install -r requirements-dev.txt"
+          CIBW_TEST_COMMAND: "pytest {project}/test_graphlib.py"
           # Install curl on manylinux_2 images (others have it) and then install cargo and rust
           CIBW_BEFORE_ALL_LINUX: "((apt-get update && apt-get install curl || true) && (curl --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable)) || apk add rust cargo"
-          CIBW_ARCHS_MACOS: x86_64 universal2 arm64
           CIBW_TEST_SKIP: "*-macosx_arm64 *-macosx_universal2:arm64"
           CIBW_BUILD: "cp37-abi3-*"
           CIBW_ENVIRONMENT_LINUX: 'PATH="$PATH:$HOME/.cargo/bin"'
+          # Cross compile on MacOS and Linux
+          CIBW_ARCHS_MACOS: "x86_64 universal2 arm64"
           CIBW_ARCHS_LINUX: "auto aarch64 ppc64le s390x"
       - uses: actions/upload-artifact@v2
         with:

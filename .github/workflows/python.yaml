@@ -30,12 +30,12 @@ jobs:
         with:
           python-version: '3.7'
       - name: Install deps
-        run: pip install -U twine setuptools-rust
+        run: pip install -U maturin
       - name: Build sdist
-        run: python setup.py sdist
+        run: maturin build --release --strip
       - uses: actions/upload-artifact@v2
         with:
-          path: ./dist/*
+          path: ./dist/*.tar.gz
           name: dist
   build_wheels:
     name: Build native wheels on ${{ matrix.os }}

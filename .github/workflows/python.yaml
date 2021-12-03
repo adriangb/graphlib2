@@ -8,11 +8,11 @@ on:
 
 
 env:
-  CIBW_BEFORE_ALL_LINUX: "curl --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable"
-  CIBW_ENVIRONMENT_LINUX: 'PATH="$PATH:$HOME/.cargo/bin"'
   CIBW_BEFORE_BUILD: pip install -r requirements-dev.txt
   CIBW_BEFORE_TEST: pip install -r requirements-dev.txt
   CIBW_TEST_COMMAND: pytest {project}/test_graphlib.py
+  CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux2010_x86_64:latest
+  CIBW_MANYLINUX_I686_IMAGE: quay.io/pypa/manylinux2010_i686:latest
 
 
 concurrency:
@@ -61,6 +61,8 @@ jobs:
           python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_SKIP: pp* *win32
+          CIBW_BEFORE_ALL_LINUX: "curl --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable"
+          CIBW_ENVIRONMENT_LINUX: 'PATH="$PATH:$HOME/.cargo/bin"'
       - uses: actions/upload-artifact@v2
         with:
           name: dist

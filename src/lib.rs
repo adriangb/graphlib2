@@ -160,13 +160,12 @@ impl PreparedState {
     fn static_order(&mut self) -> PyResult<Vec<Py<PyAny>>> {
         let mut out = Vec::new();
         let mut queue: VecDeque<_> = self.ready_nodes.drain(..).collect();
-        let mut node: usize;
         loop {
             if queue.is_empty() {
                 break;
             }
-            node = queue.pop_front().unwrap();
-            self.mark_node_as_done(node, Some(&mut queue))?;
+            let node = queue.pop_front().unwrap();
+            self.mark_nodes_as_done(vec![node].into_iter(), Some(&mut queue))?;
             out.push(self.dag.id2node.get(node).unwrap().0.clone());
         }
         self.n_passed_out += out.len() as usize;
@@ -174,49 +173,55 @@ impl PreparedState {
         Ok(out)
     }
     #[inline(always)]
-    fn mark_node_as_done(
+    fn mark_nodes_as_done(
         &mut self,
-        node: usize,
+        nodes: impl Iterator<Item = usize>,
         done_queue: Option<&mut VecDeque<usize>>,
     ) -> PyResult<()> {
         // Check that this node is ready to be marked as done and mark it
         // There is currently a remove and an insert here just to take ownership of the value
         // so that we can reference it while modifying other values
         // Maybe there's a better way?
-        let nodeinfo = self.id2nodeinfo.get_mut(node).unwrap();
-        match nodeinfo.state {
-            NodeState::Active => {
-                let pynode = self.dag.id2node.get(node).unwrap();
-                return Err(exceptions::PyValueError::new_err(format!(
-                    "node {} was not passed out (still not ready)",
-                    hashed_node_to_str(pynode)?
-                )));
-            }
-            NodeState::Done => {
-                let pynode = self.dag.id2node.get(node).unwrap();
-                return Err(exceptions::PyValueError::new_err(format!(
-                    "node {} was already marked as done",
-                    hashed_node_to_str(pynode)?
-                )));
-            }
-            NodeState::Ready => nodeinfo.state = NodeState::Done,
-        };
-        self.n_finished += 1;
-        // Find all parents and reduce their dependency count by one,
-        // returning all parents w/o any further dependencies
+        let mut nodeinfo;
         let q = match done_queue {
             Some(v) => v,
             None => &mut self.ready_nodes,
         };
         let mut parent_info: &mut NodeInfo;
-        for &parent in self.dag.parents.get(node).unwrap() {
-            parent_info = self.id2nodeinfo.get_mut(parent).unwrap();
-            parent_info.npredecessors -= 1;
-            if parent_info.npredecessors == 0 {
-                parent_info.state = NodeState::Ready;
-                q.push_back(parent);
+        let parents = &self.dag.parents;
+        let id2nodeinfo = &mut self.id2nodeinfo;
+        for node in nodes {
+            nodeinfo = id2nodeinfo.get_mut(node).unwrap();
+            match nodeinfo.state {
+                NodeState::Active => {
+                    let pynode = self.dag.id2node.get(node).unwrap();
+                    return Err(exceptions::PyValueError::new_err(format!(
+                        "node {} was not passed out (still not ready)",
+                        hashed_node_to_str(pynode)?
+                    )));
+                }
+                NodeState::Done => {
+                    let pynode = self.dag.id2node.get(node).unwrap();
+                    return Err(exceptions::PyValueError::new_err(format!(
+                        "node {} was already marked as done",
+                        hashed_node_to_str(pynode)?
+                    )));
+                }
+                NodeState::Ready => nodeinfo.state = NodeState::Done,
+            };
+            self.n_finished += 1;
+            // Find all parents and reduce their dependency count by one,
+            // returning all parents w/o any further dependencies
+            for &parent in parents.get(node).unwrap() {
+                parent_info = id2nodeinfo.get_mut(parent).unwrap();
+                parent_info.npredecessors -= 1;
+                if parent_info.npredecessors == 0 {
+                    parent_info.state = NodeState::Ready;
+                    q.push_back(parent);
+                }
             }
         }
+
         Ok(())
     }
 }
@@ -353,14 +358,8 @@ impl TopologicalSorter {
             node_ids.push(node_id);
         }
         py.allow_threads(|| -> PyResult<()> {
-            for node_id in node_ids.into_iter() {
-                if let Err(e) = state.mark_node_as_done(node_id, None) {
-                    return Err(e);
-                }
-            }
-            Ok(())
-        })?;
-        Ok(())
+            state.mark_nodes_as_done(node_ids.into_iter(), None)
+        })
     }
     fn is_active(&self) -> PyResult<bool> {
         match &self.state {

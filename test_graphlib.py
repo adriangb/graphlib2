@@ -260,11 +260,11 @@ def test_is_active():
     ts.prepare()
 
     assert ts.is_active()
-    assert ts.get_ready() == (2,)
+    assert set(ts.get_ready()) == {2}
     assert ts.is_active()
     ts.done(2)
     assert ts.is_active()
-    assert ts.get_ready() == (1,)
+    assert set(ts.get_ready()) == {1}
     assert ts.is_active()
     ts.done(1)
     assert not ts.is_active()

@@ -16,3 +16,4 @@
 !/LICENSE.txt
 
 __pycache__
+*.so

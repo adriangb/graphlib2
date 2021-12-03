@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Generic, Iterable, Optional, Sequence, Tuple, TypeVar
+from typing import Generic, Iterable, Optional, TypeVar
 
 from graphlib2._types import SupportsItems
 from graphlib2.graphlib2 import CycleError
@@ -21,7 +21,7 @@ class TopologicalSorter(Generic[_T]):
     def add(self, node: _T, *predecessors: _T) -> None:
         self._ts.add(node, predecessors)
 
-    def get_ready(self) -> Tuple[_T, ...]:
+    def get_ready(self) -> Iterable[_T]:
         return self._ts.get_ready()
 
     def done(self, *nodes: _T) -> None:
@@ -40,18 +40,6 @@ class TopologicalSorter(Generic[_T]):
         new: TopologicalSorter[_T] = object.__new__(TopologicalSorter)
         new._ts = self._ts.copy()
         return new
-
-    def get_ids(self, *nodes: _T) -> Sequence[int]:
-        return self._ts.get_ids(nodes)
-
-    def done_by_id(self, *nodes: int) -> None:
-        self._ts.done_by_id(nodes)
-
-    def remove_nodes(self, nodes: Iterable[_T]) -> None:
-        self._ts.remove_nodes(nodes)
-
-    def remove_nodes_by_id(self, nodes: Iterable[int]) -> None:
-        self._ts.remove_nodes_by_id(nodes)
 
 
 __all__ = ("TopologicalSorter", "CycleError")

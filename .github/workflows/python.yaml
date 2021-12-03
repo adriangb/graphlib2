@@ -30,28 +30,19 @@ jobs:
           path: ./dist/*.tar.gz
           name: dist
   build_wheels:
-    name: Build native wheels on ${{ matrix.os }} / Python ${{ matrix.python }}
+    name: Build native wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        # For CPython only build 3.7 since we use the abi3 limited API
-        # For PyPy, build all versions
-        python: ["3.7", "pypy-3.7", "pypy-3.8"]
-        include:
-          - python: "pypy-3.7"
-            cibw_build: "pp*"
-          - python: "pypy-3.8"
-            cibw_build: "pp*"
-          - python: "3.7"
-            cibw_build: "cp37-*"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python }}
       - uses: actions-rs/toolchain@v1
+        if: runner.os != 'Linux'
         with:
           toolchain: stable
       - name: Set up QEMU
@@ -72,7 +63,7 @@ jobs:
           # Install curl on manylinux_2 images (others have it) and then install cargo and rust
           CIBW_BEFORE_ALL_LINUX: "((apt-get update && apt-get install curl || true) && (curl --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable)) || apk add rust cargo"
           CIBW_TEST_SKIP: "*-macosx_arm64 *-macosx_universal2:arm64"
-          CIBW_BUILD: ${{ matrix.cibw_build }}
+          CIBW_BUILD: "cp37-* pp*"
           CIBW_ENVIRONMENT_LINUX: 'PATH="$PATH:$HOME/.cargo/bin"'
           # Cross compile on MacOS and Linux
           CIBW_ARCHS_MACOS: "auto universal2 arm64"

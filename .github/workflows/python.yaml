@@ -55,6 +55,7 @@ jobs:
         if: runner.os != 'Linux'
         with:
           toolchain: stable
+          profile: minimal
       - name: Set up QEMU
         if: runner.os == 'Linux'
         uses: docker/setup-qemu-action@v1
@@ -74,6 +75,7 @@ jobs:
           CIBW_BEFORE_ALL_LINUX: "((apt-get update && apt-get install curl || true) && (curl --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable)) || apk add rust cargo"
           CIBW_TEST_SKIP: "*-macosx_arm64 *-macosx_universal2:arm64"
           CIBW_BUILD: ${{ matrix.cibw_build }}
+          CIBW_SKIP: "*-win32*"
           CIBW_ENVIRONMENT_LINUX: 'PATH="$PATH:$HOME/.cargo/bin"'
           # Cross compile on MacOS and Linux
           CIBW_ARCHS_MACOS: "auto universal2 arm64"

@@ -45,13 +45,12 @@ jobs:
           - python: "pypy-3.8"
             cibw_build: "pp*"
           - python: "3.7"
-            cibw_build: "cp37-"
+            cibw_build: "cp37-*"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
-        name: Install Python
-        with:
-          python-version: '3.7'
+          with:
+            python-version: ${{ matrix.python }}
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -109,14 +108,6 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' }}
     needs:
       - sdist
-      # - build-win32-wheels
-      # - build-mac-arm-wheels
-      # - build_wheels_s390x_part2
-      # - build_wheels_s390x
-      # - build_wheels_s390x
-      # - build_wheels_ppc64le_part2
-      # - build_wheels_ppc64le
-      # - build_wheels_aarch64
       - build_wheels
     steps:
       - uses: actions/download-artifact@v2

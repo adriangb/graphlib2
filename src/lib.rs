@@ -37,7 +37,6 @@ struct UnpreparedState {
     id2node: Vec<HashedAny>,
     node2id: HashMap<HashedAny, usize, BuildNoHashHasher<isize>>,
     parents: Vec<Vec<usize>>,
-    children: Vec<Vec<usize>>,
 }
 
 impl UnpreparedState {
@@ -51,7 +50,6 @@ impl UnpreparedState {
         self.node2id.insert(node.clone(), node_id);
         self.id2nodeinfo.insert(node_id, nodeinfo);
         self.parents.insert(node_id, Vec::new());
-        self.children.insert(node_id, Vec::new());
         node_id
     }
     fn get_or_insert_node_id(&mut self, node: &HashedAny) -> usize {
@@ -67,7 +65,6 @@ impl UnpreparedState {
         self.id2nodeinfo.get_mut(node_id).unwrap().npredecessors += children.len();
         for child in children.into_iter() {
             child_id = self.get_or_insert_node_id(&child);
-            self.children.get_mut(node_id).unwrap().push(child_id);
             self.parents.get_mut(child_id).unwrap().push(node_id);
         }
         Ok(())
@@ -298,7 +295,6 @@ impl TopologicalSorter {
             id2node: Vec::new(),
             node2id: HashMap::default(),
             parents: Vec::new(),
-            children: Vec::new(),
         };
         if let Some(g) = graph {
             for (node, v) in g.iter() {

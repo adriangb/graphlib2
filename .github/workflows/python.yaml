@@ -10,8 +10,6 @@ on:
 env:
   CIBW_BEFORE_ALL_LINUX: "curl --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable"
   CIBW_ENVIRONMENT_LINUX: 'PATH="$PATH:$HOME/.cargo/bin"'
-  CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux2010_x86_64:latest
-  CIBW_MANYLINUX_I686_IMAGE: quay.io/pypa/manylinux2010_i686:latest
   CIBW_BEFORE_BUILD: pip install -r requirements-dev.txt
   CIBW_BEFORE_TEST: pip install -r requirements-dev.txt
   CIBW_TEST_COMMAND: pytest {project}/test_graphlib.py
@@ -25,7 +23,6 @@ jobs:
   sdist:
     name: Build sdist
     runs-on: ubuntu-latest
-    needs: ["build_wheels", "build-win32-wheels"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -39,11 +36,7 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           path: ./dist/*
-      - name: Upload to PyPI
-        run: twine upload ./dist/*
-        env:
-          TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-          TWINE_USERNAME: retworkx-ci
+          name: dist
   build_wheels:
     name: Build native wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

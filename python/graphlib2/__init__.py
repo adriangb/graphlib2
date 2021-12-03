@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Generic, Iterable, Optional, Tuple, TypeVar
+from typing import Generic, Iterable, Optional, TypeVar
 
 from graphlib2._types import SupportsItems
 from graphlib2.graphlib2 import CycleError
@@ -21,7 +21,7 @@ class TopologicalSorter(Generic[_T]):
     def add(self, node: _T, *predecessors: _T) -> None:
         self._ts.add(node, predecessors)
 
-    def get_ready(self) -> Tuple[_T, ...]:
+    def get_ready(self) -> Iterable[_T]:
         return self._ts.get_ready()
 
     def done(self, *nodes: _T) -> None:

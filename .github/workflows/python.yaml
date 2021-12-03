@@ -30,12 +30,13 @@ jobs:
           path: ./dist/*.tar.gz
           name: dist
   build_wheels:
-    name: Build native wheels on ${{ matrix.os }}
+    name: Build native wheels on ${{ matrix.os }} / Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.7", "pypy-3.7", "pypy-3.8"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -57,7 +58,8 @@ jobs:
         run: |
           python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BEFORE_ALL: "pip install -r requirements-dev.txt"
+          CIBW_BEFORE_BUILD: "pip install -r requirements-dev.txt"
+          CIBW_BEFORE_TEST: "pip install -r requirements-dev.txt"
           CIBW_TEST_COMMAND: "pytest {project}/test_graphlib.py"
           # Install curl on manylinux_2 images (others have it) and then install cargo and rust
           CIBW_BEFORE_ALL_LINUX: "((apt-get update && apt-get install curl || true) && (curl --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable)) || apk add rust cargo"

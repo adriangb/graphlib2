@@ -277,14 +277,14 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' }}
     needs:
       - sdist
-      - build-win32-wheels
-      - build-mac-arm-wheels
-      - build_wheels_s390x_part2
-      - build_wheels_s390x
-      - build_wheels_s390x
-      - build_wheels_ppc64le_part2
-      - build_wheels_ppc64le
-      - build_wheels_aarch64
+      # - build-win32-wheels
+      # - build-mac-arm-wheels
+      # - build_wheels_s390x_part2
+      # - build_wheels_s390x
+      # - build_wheels_s390x
+      # - build_wheels_ppc64le_part2
+      # - build_wheels_ppc64le
+      # - build_wheels_aarch64
       - build_wheels
     steps:
       - uses: actions/download-artifact@v2

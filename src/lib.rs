@@ -18,20 +18,20 @@ use crate::hashedany::HashedAny;
 
 create_exception!(graphlib2, CycleError, exceptions::PyValueError);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 enum NodeState {
     Active,
     Ready,
     Done,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct NodeInfo {
     state: NodeState,
     npredecessors: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct UnpreparedState {
     id2nodeinfo: Vec<NodeInfo>,
     id2node: Vec<HashedAny>,
@@ -120,7 +120,6 @@ impl UnpreparedState {
     }
 }
 
-#[derive(Clone, Debug)]
 struct SolvedDAG {
     // "Immutable" fields that can be shared
     id2node: Vec<HashedAny>,
@@ -128,7 +127,7 @@ struct SolvedDAG {
     parents: Vec<Vec<usize>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct PreparedState {
     dag: Arc<SolvedDAG>,
     // "Mutable" fields that need to be copied
@@ -139,7 +138,6 @@ struct PreparedState {
 }
 
 impl PreparedState {
-    #[inline(always)]
     fn get_ready(&mut self) -> Vec<Py<PyAny>> {
         let mut ret: Vec<Py<PyAny>> = Vec::with_capacity(self.ready_nodes.len());
         self.n_passed_out += self.ready_nodes.len();
@@ -149,11 +147,9 @@ impl PreparedState {
         }
         ret
     }
-    #[inline(always)]
     fn is_active(&self) -> bool {
         self.n_finished < self.n_passed_out || !self.ready_nodes.is_empty()
     }
-    #[inline(always)]
     fn static_order(&mut self) -> PyResult<Vec<Py<PyAny>>> {
         let mut out = Vec::new();
         let mut queue: VecDeque<_> = self.ready_nodes.drain(..).collect();
@@ -169,7 +165,6 @@ impl PreparedState {
         self.n_finished += out.len() as usize;
         Ok(out)
     }
-    #[inline(always)]
     fn mark_nodes_as_done(
         &mut self,
         nodes: impl Iterator<Item = usize>,
@@ -218,12 +213,11 @@ impl PreparedState {
                 }
             }
         }
-
         Ok(())
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 enum State {
     Unprepared(UnpreparedState),
     Prepared(PreparedState),
@@ -326,7 +320,7 @@ impl TopologicalSorter {
     /// # Arguments
     ///
     /// * `nodes` - Python objects representing nodes in the graph
-    fn done(&mut self, nodes: &PyTuple, py: Python) -> PyResult<()> {
+    fn done(&mut self, nodes: &PyTuple) -> PyResult<()> {
         let state = match &mut self.state {
             State::Prepared(state) => state,
             State::Unprepared(_) => {
@@ -335,7 +329,7 @@ impl TopologicalSorter {
                 ))
             }
         };
-        let mut node_ids = Vec::new();
+        let mut node_ids = Vec::with_capacity(nodes.len());
         let mut node_id: usize;
         // Run this loop before marking as done so that we avoid
         // acquiring the GIL in a loop
@@ -353,9 +347,7 @@ impl TopologicalSorter {
             };
             node_ids.push(node_id);
         }
-        py.allow_threads(|| -> PyResult<()> {
-            state.mark_nodes_as_done(node_ids.into_iter(), None)
-        })
+        state.mark_nodes_as_done(node_ids.into_iter(), None)
     }
     fn is_active(&self) -> PyResult<bool> {
         match &self.state {
@@ -366,14 +358,16 @@ impl TopologicalSorter {
         }
     }
     /// Returns all nodes with no dependencies
-    fn get_ready<'py>(&mut self, py: Python<'py>) -> PyResult<&'py PyTuple> {
-        let ret = py.allow_threads(|| match &mut self.state {
-            State::Prepared(state) => Ok(state.get_ready()),
-            State::Unprepared(_) => Err(exceptions::PyValueError::new_err(
-                "prepare() must be called first",
-            )),
-        })?;
-        Ok(PyTuple::new(py, &ret))
+    fn get_ready<'py>(&mut self) -> PyResult<Vec<Py<PyAny>>> {
+        let state = match &mut self.state {
+            State::Prepared(state) => state,
+            State::Unprepared(_) => {
+                return Err(exceptions::PyValueError::new_err(
+                    "prepare() must be called first",
+                ))
+            }
+        };
+        Ok(state.get_ready())
     }
     fn static_order(&mut self) -> PyResult<Vec<Py<PyAny>>> {
         self.prepare()?;

@@ -59,7 +59,7 @@ jobs:
         run: |
           python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BUILD: cp37-macosx_* cp37-win* cp37-manylinux
+          CIBW_SKIP: "pp* cp3{8,9,10,11}-macosx_* cp3{8,9,10,11}-win*"
           CIBW_ENVIRONMENT_LINUX: 'PATH="$PATH:$HOME/.cargo/bin"'
       - uses: actions/upload-artifact@v2
         with:

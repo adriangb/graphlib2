@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::fmt;
+use std::sync::Arc;
 
 use nohash_hasher::BuildNoHashHasher;
 use pyo3::create_exception;
@@ -26,82 +27,27 @@ enum NodeState {
 
 #[derive(Clone, Debug)]
 struct NodeInfo {
-    node: HashedAny,
     state: NodeState,
     npredecessors: usize,
 }
 
-// This is the main atastore for a graph
-// There are some notable differences between this version and the stdlib:
-// 1. We map all nodes to a usize int so that all internal operations can be done faster and infalliably
-// 2. We store parents and children outside of NodeInfo so that we can borrow them as mutable seperately
-// Other than that, the algorithm and representation of the graph are very similar
-
-#[pyclass(module = "graphlib2", freelist = 8)]
-#[derive(Clone)]
-struct TopologicalSorter {
+#[derive(Clone, Debug)]
+struct UnpreparedState {
     id2nodeinfo: Vec<NodeInfo>,
+    id2node: Vec<HashedAny>,
     node2id: HashMap<HashedAny, usize, BuildNoHashHasher<isize>>,
     parents: Vec<Vec<usize>>,
     children: Vec<Vec<usize>>,
-    ready_nodes: VecDeque<usize>,
-    n_passed_out: usize,
-    n_finished: usize,
-    prepared: bool,
-    iterating: bool,
 }
 
-impl TopologicalSorter {
-    fn mark_node_as_done(
-        &mut self,
-        node: usize,
-        done_queue: Option<&mut VecDeque<usize>>,
-    ) -> PyResult<()> {
-        // Check that this node is ready to be marked as done and mark it
-        // There is currently a remove and an insert here just to take ownership of the value
-        // so that we can reference it while modifying other values
-        // Maybe there's a better way?
-        let nodeinfo = self.id2nodeinfo.get_mut(node).unwrap();
-        match nodeinfo.state {
-            NodeState::Active => {
-                return Err(exceptions::PyValueError::new_err(format!(
-                    "node {} was not passed out (still not ready)",
-                    hashed_node_to_str(&nodeinfo.node)?
-                )))
-            }
-            NodeState::Done => {
-                return Err(exceptions::PyValueError::new_err(format!(
-                    "node {} was already marked as done",
-                    hashed_node_to_str(&nodeinfo.node)?
-                )))
-            }
-            NodeState::Ready => nodeinfo.state = NodeState::Done,
-        };
-        self.n_finished += 1;
-        // Find all parents and reduce their dependency count by one,
-        // returning all parents w/o any further dependencies
-        let q = match done_queue {
-            Some(v) => v,
-            None => &mut self.ready_nodes,
-        };
-        let mut parent_info: &mut NodeInfo;
-        for &parent in self.parents.get(node).unwrap() {
-            parent_info = self.id2nodeinfo.get_mut(parent).unwrap();
-            parent_info.npredecessors -= 1;
-            if parent_info.npredecessors == 0 {
-                parent_info.state = NodeState::Ready;
-                q.push_back(parent);
-            }
-        }
-        Ok(())
-    }
+impl UnpreparedState {
     fn new_node(&mut self, node: &HashedAny) -> usize {
         let node_id = self.node2id.len();
         let nodeinfo = NodeInfo {
-            node: node.clone(),
             state: NodeState::Active,
             npredecessors: 0,
         };
+        self.id2node.insert(node_id, node.clone());
         self.node2id.insert(node.clone(), node_id);
         self.id2nodeinfo.insert(node_id, nodeinfo);
         self.parents.insert(node_id, Vec::new());
@@ -177,33 +123,142 @@ impl TopologicalSorter {
     }
 }
 
+#[derive(Clone, Debug)]
+struct SolvedDAG {
+    // "Immutable" fields that can be shared
+    id2node: Vec<HashedAny>,
+    node2id: HashMap<HashedAny, usize, BuildNoHashHasher<isize>>,
+    parents: Vec<Vec<usize>>,
+}
+
+#[derive(Clone, Debug)]
+struct PreparedState {
+    dag: Arc<SolvedDAG>,
+    // "Mutable" fields that need to be copied
+    ready_nodes: VecDeque<usize>,
+    id2nodeinfo: Vec<NodeInfo>,
+    n_passed_out: usize,
+    n_finished: usize,
+}
+
+impl PreparedState {
+    #[inline(always)]
+    fn get_ready(&mut self) -> Vec<Py<PyAny>> {
+        let mut ret: Vec<Py<PyAny>> = Vec::with_capacity(self.ready_nodes.len());
+        self.n_passed_out += self.ready_nodes.len();
+        let id2node = &self.dag.id2node;
+        for node in self.ready_nodes.drain(..) {
+            ret.push(id2node.get(node).unwrap().0.clone())
+        }
+        ret
+    }
+    #[inline(always)]
+    fn is_active(&self) -> bool {
+        self.n_finished < self.n_passed_out || !self.ready_nodes.is_empty()
+    }
+    #[inline(always)]
+    fn static_order(&mut self) -> PyResult<Vec<Py<PyAny>>> {
+        let mut out = Vec::new();
+        let mut queue: VecDeque<_> = self.ready_nodes.drain(..).collect();
+        let mut node: usize;
+        loop {
+            if queue.is_empty() {
+                break;
+            }
+            node = queue.pop_front().unwrap();
+            self.mark_node_as_done(node, Some(&mut queue))?;
+            out.push(self.dag.id2node.get(node).unwrap().0.clone());
+        }
+        self.n_passed_out += out.len() as usize;
+        self.n_finished += out.len() as usize;
+        Ok(out)
+    }
+    #[inline(always)]
+    fn mark_node_as_done(
+        &mut self,
+        node: usize,
+        done_queue: Option<&mut VecDeque<usize>>,
+    ) -> PyResult<()> {
+        // Check that this node is ready to be marked as done and mark it
+        // There is currently a remove and an insert here just to take ownership of the value
+        // so that we can reference it while modifying other values
+        // Maybe there's a better way?
+        let nodeinfo = self.id2nodeinfo.get_mut(node).unwrap();
+        match nodeinfo.state {
+            NodeState::Active => {
+                let pynode = self.dag.id2node.get(node).unwrap();
+                return Err(exceptions::PyValueError::new_err(format!(
+                    "node {} was not passed out (still not ready)",
+                    hashed_node_to_str(pynode)?
+                )));
+            }
+            NodeState::Done => {
+                let pynode = self.dag.id2node.get(node).unwrap();
+                return Err(exceptions::PyValueError::new_err(format!(
+                    "node {} was already marked as done",
+                    hashed_node_to_str(pynode)?
+                )));
+            }
+            NodeState::Ready => nodeinfo.state = NodeState::Done,
+        };
+        self.n_finished += 1;
+        // Find all parents and reduce their dependency count by one,
+        // returning all parents w/o any further dependencies
+        let q = match done_queue {
+            Some(v) => v,
+            None => &mut self.ready_nodes,
+        };
+        let mut parent_info: &mut NodeInfo;
+        for &parent in self.dag.parents.get(node).unwrap() {
+            parent_info = self.id2nodeinfo.get_mut(parent).unwrap();
+            parent_info.npredecessors -= 1;
+            if parent_info.npredecessors == 0 {
+                parent_info.state = NodeState::Ready;
+                q.push_back(parent);
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+enum State {
+    Unprepared(UnpreparedState),
+    Prepared(PreparedState),
+}
+
+#[pyclass(module = "graphlib2")]
+#[derive(Clone)]
+struct TopologicalSorter {
+    state: State,
+}
+
 #[pymethods]
 impl TopologicalSorter {
     // Add a new node to the graph
     fn add(&mut self, node: HashedAny, predecessors: Vec<HashedAny>) -> PyResult<()> {
-        self.add_node(node, predecessors)
-    }
-    fn get_ids(&self, nodes: Vec<HashedAny>) -> PyResult<Vec<usize>> {
-        let mut res = Vec::new();
-        for node in nodes.into_iter() {
-            match self.node2id.get(&node) {
-                Some(&v) => res.push(v),
-                None => return Err(PyValueError::new_err("Node {:?} was not added using add()")),
-            }
+        match &mut self.state {
+            State::Unprepared(state) => state.add_node(node, predecessors),
+            State::Prepared(_) => Err(exceptions::PyValueError::new_err(
+                "Nodes cannot be added after a call to prepare()",
+            )),
         }
-        Ok(res)
     }
     // Check for cycles and gather leafs
     fn prepare(&mut self) -> PyResult<()> {
-        if self.prepared {
-            return Err(exceptions::PyValueError::new_err(
-                "cannot prepare() more than once",
-            ));
-        }
-        if let Some(cycle) = self.find_cycle() {
+        let state = match &mut self.state {
+            State::Prepared(_) => {
+                return Err(exceptions::PyValueError::new_err(
+                    "cannot prepare() more than once",
+                ))
+            }
+            State::Unprepared(state) => state,
+        };
+        let mut ready_nodes = VecDeque::new();
+        if let Some(cycle) = state.find_cycle() {
             let maybe_items: PyResult<Vec<String>> = cycle
                 .iter()
-                .map(|n| hashed_node_to_str(&self.id2nodeinfo.get(*n).unwrap().node))
+                .map(|n| hashed_node_to_str(state.id2node.get(*n).unwrap()))
                 .collect();
             let items = maybe_items?;
             let items_str = items.join(", ");
@@ -212,27 +267,33 @@ impl TopologicalSorter {
                 items,
             )));
         }
-        self.prepared = true;
-        for (node, nodeinfo) in self.id2nodeinfo.iter_mut().enumerate() {
+        for (node, nodeinfo) in state.id2nodeinfo.iter_mut().enumerate() {
             if nodeinfo.npredecessors == 0 {
-                self.ready_nodes.push_back(node);
+                ready_nodes.push_back(node);
                 nodeinfo.state = NodeState::Ready;
             }
         }
+        self.state = State::Prepared(PreparedState {
+            dag: Arc::new(SolvedDAG {
+                id2node: state.id2node.clone(),
+                node2id: state.node2id.clone(),
+                parents: state.parents.clone(),
+            }),
+            ready_nodes,
+            id2nodeinfo: state.id2nodeinfo.clone(),
+            n_passed_out: 0,
+            n_finished: 0,
+        });
         Ok(())
     }
     #[new]
     fn new(graph: Option<&PyDict>) -> PyResult<Self> {
-        let mut this = TopologicalSorter {
+        let mut state = UnpreparedState {
             id2nodeinfo: Vec::new(),
+            id2node: Vec::new(),
             node2id: HashMap::default(),
             parents: Vec::new(),
             children: Vec::new(),
-            ready_nodes: VecDeque::new(),
-            n_passed_out: 0,
-            n_finished: 0,
-            prepared: false,
-            iterating: false,
         };
         if let Some(g) = graph {
             for (node, v) in g.iter() {
@@ -241,9 +302,12 @@ impl TopologicalSorter {
                 for el in i {
                     children.push(HashedAny::extract(el?)?);
                 }
-                this.add_node(node.extract()?, children)?;
+                state.add_node(node.extract()?, children)?;
             }
         }
+        let this = TopologicalSorter {
+            state: State::Unprepared(state),
+        };
         Ok(this)
     }
     /// Returns string representation of the graph
@@ -262,19 +326,22 @@ impl TopologicalSorter {
     ///
     /// * `nodes` - Python objects representing nodes in the graph
     fn done(&mut self, nodes: &PyTuple, py: Python) -> PyResult<()> {
+        let state = match &mut self.state {
+            State::Prepared(state) => state,
+            State::Unprepared(_) => {
+                return Err(exceptions::PyValueError::new_err(
+                    "prepare() must be called first",
+                ))
+            }
+        };
         let mut node_ids = Vec::new();
-        if !self.prepared {
-            return Err(exceptions::PyValueError::new_err(
-                "prepare() must be called first",
-            ));
-        }
         let mut node_id: usize;
         // Run this loop before marking as done so that we avoid
         // acquiring the GIL in a loop
         let mut hashed_node;
         for node in nodes {
             hashed_node = HashedAny::extract(node)?;
-            node_id = match self.node2id.get(&hashed_node) {
+            node_id = match state.dag.node2id.get(&hashed_node) {
                 Some(&v) => v,
                 None => {
                     return Err(PyValueError::new_err(format!(
@@ -287,7 +354,7 @@ impl TopologicalSorter {
         }
         py.allow_threads(|| -> PyResult<()> {
             for node_id in node_ids.into_iter() {
-                if let Err(e) = self.mark_node_as_done(node_id, None) {
+                if let Err(e) = state.mark_node_as_done(node_id, None) {
                     return Err(e);
                 }
             }
@@ -296,47 +363,30 @@ impl TopologicalSorter {
         Ok(())
     }
     fn is_active(&self) -> PyResult<bool> {
-        if !self.prepared {
-            return Err(exceptions::PyValueError::new_err(
+        match &self.state {
+            State::Prepared(state) => Ok(state.is_active()),
+            State::Unprepared(_) => Err(exceptions::PyValueError::new_err(
                 "prepare() must be called first",
-            ));
+            )),
         }
-        Ok(self.n_finished < self.n_passed_out || !self.ready_nodes.is_empty())
     }
     /// Returns all nodes with no dependencies
     fn get_ready<'py>(&mut self, py: Python<'py>) -> PyResult<&'py PyTuple> {
-        let ret = py.allow_threads(|| {
-            self.iterating = true;
-            if !self.prepared {
-                return Err(exceptions::PyValueError::new_err(
-                    "prepare() must be called first",
-                ));
-            }
-            let mut ret: Vec<Py<PyAny>> = Vec::with_capacity(self.ready_nodes.len());
-            self.n_passed_out += self.ready_nodes.len() as usize;
-            for node in self.ready_nodes.drain(..) {
-                ret.push(self.id2nodeinfo.get(node).unwrap().node.0.clone())
-            }
-            Ok(ret)
+        let ret = py.allow_threads(|| match &mut self.state {
+            State::Prepared(state) => Ok(state.get_ready()),
+            State::Unprepared(_) => Err(exceptions::PyValueError::new_err(
+                "prepare() must be called first",
+            )),
         })?;
         Ok(PyTuple::new(py, &ret))
     }
     fn static_order(&mut self) -> PyResult<Vec<Py<PyAny>>> {
         self.prepare()?;
-        let mut out = Vec::new();
-        let mut queue: VecDeque<_> = self.ready_nodes.drain(..).collect();
-        let mut node: usize;
-        loop {
-            if queue.is_empty() {
-                break;
-            }
-            node = queue.pop_front().unwrap();
-            self.mark_node_as_done(node, Some(&mut queue))?;
-            out.push(self.id2nodeinfo.get(node).unwrap().node.0.clone());
+        match &mut self.state {
+            State::Prepared(state) => state.static_order(),
+            // This arm _should_ never match!
+            State::Unprepared(_) => panic!("Calling prepare() failed"),
         }
-        self.n_passed_out += out.len() as usize;
-        self.n_finished += out.len() as usize;
-        Ok(out)
     }
 }
 

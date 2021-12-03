@@ -96,8 +96,6 @@ impl TopologicalSorter {
         Ok(())
     }
     fn new_node(&mut self, node: &HashedAny) -> usize {
-        // Here we call back into Python to get a new node id
-        // This is slow, so it should only be done once
         let node_id = self.node2id.len();
         let nodeinfo = NodeInfo {
             node: node.clone(),
@@ -157,12 +155,13 @@ impl TopologicalSorter {
                     stack.push(node);
                 }
                 // Backtrack to the topmost stack entry with at least 1 parent
-                let mut broke = false;
-                while !stack.is_empty() {
+                loop {
+                    if stack.is_empty() {
+                        break 'outer;
+                    }
                     match itstack.last_mut().unwrap().next() {
                         Some(parent) => {
                             node = *parent;
-                            broke = true;
                             break;
                         }
                         None => {
@@ -171,9 +170,6 @@ impl TopologicalSorter {
                             continue;
                         }
                     }
-                }
-                if !broke {
-                    break 'outer;
                 }
             }
         }

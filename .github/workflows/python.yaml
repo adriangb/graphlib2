@@ -12,7 +12,7 @@ env:
   CIBW_BEFORE_TEST: pip install -r requirements-dev.txt
   CIBW_TEST_COMMAND: pytest {project}/test_graphlib.py
   # Install curl on manylinux_2 images (others have it) and then install cargo and rust
-  CIBW_BEFORE_ALL_LINUX: "(apt-get update && apt-get install curl || true) && curl --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable"
+  CIBW_BEFORE_ALL_LINUX: "((apt-get update && apt-get install curl || true) && (curl --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable)) || apk add rust cargo"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -59,7 +59,7 @@ jobs:
         run: |
           python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_SKIP: pp* *win32
+          CIBW_BUILD: cp37-macosx_* cp37-win* cp37-manylinux
           CIBW_ENVIRONMENT_LINUX: 'PATH="$PATH:$HOME/.cargo/bin"'
       - uses: actions/upload-artifact@v2
         with:

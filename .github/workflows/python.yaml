@@ -49,8 +49,8 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
-          with:
-            python-version: ${{ matrix.python }}
+        with:
+          python-version: ${{ matrix.python }}
       - uses: actions-rs/toolchain@v1
         if: runner.os != 'Linux'
         with:

@@ -8,11 +8,12 @@ on:
 
 
 env:
-  CIBW_BEFORE_BUILD: pip install -r requirements-dev.txt
-  CIBW_BEFORE_TEST: pip install -r requirements-dev.txt
+  CIBW_BEFORE_ALL: pip install -r requirements-dev.txt
   CIBW_TEST_COMMAND: pytest {project}/test_graphlib.py
   # Install curl on manylinux_2 images (others have it) and then install cargo and rust
   CIBW_BEFORE_ALL_LINUX: "((apt-get update && apt-get install curl || true) && (curl --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable)) || apk add rust cargo"
+  CIBW_ARCHS_MACOS: x86_64 universal2 arm64
+  CIBW_TEST_SKIP: "*-macosx_arm64 *-macosx_universal2:arm64"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -59,7 +60,10 @@ jobs:
         run: |
           python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_SKIP: "pp* cp3{8,9,10,11}-macosx_* cp3{8,9,10,11}-win*"
+          # Skip PyPy, we call into Python from Rust and that is not supported by PyO3 + PyPy
+          # MacOS and Windows build abi3 wheels
+          # Since all Python version produce the same wheel, skip anything > 3.7
+          CIBW_BUILD: "cp37-abi3-*"
           CIBW_ENVIRONMENT_LINUX: 'PATH="$PATH:$HOME/.cargo/bin"'
       - uses: actions/upload-artifact@v2
         with:

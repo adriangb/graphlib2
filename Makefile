@@ -3,7 +3,7 @@ PHONY: init build test
 .init:
 	rm -rf venv
 	python -m venv venv
-	./venv/bin/pip install -r requirements-dev.txt
+	./venv/bin/pip install -r requirements-dev.txt -r requirements-bench.txt
 	./venv/bin/pre-commit install
 	touch .init
 
@@ -12,7 +12,7 @@ PHONY: init build test
 
 init: .clean .init
 
-build-develop:
+build-develop: .init
 	. ./venv/bin/activate && maturin develop --release --strip
 
 build-manylinux:

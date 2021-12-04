@@ -79,7 +79,7 @@ jobs:
           CIBW_ENVIRONMENT_LINUX: 'PATH="$PATH:$HOME/.cargo/bin"'
           # Cross compile on MacOS and Linux
           CIBW_ARCHS_MACOS: "auto universal2 arm64"
-          CIBW_ARCHS_LINUX: "auto aarch64 ppc64le s390x"
+          CIBW_ARCHS_LINUX: "auto aarch64"
       - uses: actions/upload-artifact@v2
         with:
           name: dist

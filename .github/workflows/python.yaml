@@ -27,7 +27,7 @@ jobs:
         run: maturin build --release --strip
       - uses: actions/upload-artifact@v2
         with:
-          path: ./dist/*.tar.gz
+          path: ./target/wheels/*.tar.gz
           name: dist
   build_wheels:
     name: Build wheels on ${{ matrix.os }} / Python ${{ matrix.python }}

@@ -1,44 +1,59 @@
 from __future__ import annotations
 
-from typing import Generic, Iterable, Optional, TypeVar
+from typing import Any, Dict, Generic, Iterable, Optional, TypeVar
 
 from graphlib2._types import SupportsItems
 from graphlib2.graphlib2 import CycleError
 from graphlib2.graphlib2 import TopologicalSorter as _TopologicalSorter
 
-_T = TypeVar("_T")
+T = TypeVar("T")
 
 
-class TopologicalSorter(Generic[_T]):
-    __slots__ = ("_ts", "_node_id_factory")
+class TopologicalSorter(Generic[T]):
+    __slots__ = ("_ts",)
+
+    _ts: _TopologicalSorter[T]
 
     def __init__(
         self,
-        graph: Optional[SupportsItems[_T, Iterable[_T]]] = None,
+        graph: Optional[SupportsItems[T, Iterable[T]]] = None,
+        *,
+        _topological_sorter: Optional[_TopologicalSorter[T]] = None,
     ) -> None:
-        self._ts: _TopologicalSorter[_T] = _TopologicalSorter(graph)
+        self._ts = _topological_sorter or _TopologicalSorter(graph)
 
-    def add(self, node: _T, *predecessors: _T) -> None:
+    def add(self, node: T, *predecessors: T) -> None:
         self._ts.add(node, predecessors)
 
-    def get_ready(self) -> Iterable[_T]:
+    def get_ready(self) -> Iterable[T]:
         return self._ts.get_ready()
 
-    def done(self, *nodes: _T) -> None:
+    def done(self, *nodes: T) -> None:
         self._ts.done(nodes)
 
     def is_active(self) -> bool:
         return self._ts.is_active()
 
+    def __bool__(self) -> bool:
+        return self.is_active()
+
     def prepare(self) -> None:
         self._ts.prepare()
 
-    def static_order(self) -> Iterable[_T]:
+    def static_order(self) -> Iterable[T]:
         return self._ts.static_order()
 
-    def copy(self: TopologicalSorter[_T]) -> TopologicalSorter[_T]:
-        new: TopologicalSorter[_T] = object.__new__(TopologicalSorter)
-        new._ts = self._ts.copy()
+    def copy(self: TopologicalSorter[T]) -> TopologicalSorter[T]:
+        return TopologicalSorter(_topological_sorter=self._ts.copy())
+
+    def __copy__(self: TopologicalSorter[T]) -> TopologicalSorter[T]:
+        return self.copy()
+
+    def __deepcopy__(
+        self: TopologicalSorter[T], memo: Dict[Any, Any]
+    ) -> TopologicalSorter[T]:
+        new = self.copy()
+        memo[self] = new
         return new
 
 

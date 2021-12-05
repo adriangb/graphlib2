@@ -1,9 +1,13 @@
 # graphlib2
 
+![CI](https://github.com/adriangb/graphlib2/actions/workflows/python.yaml/badge.svg)
+
 This is a Rust port of Python's stdlib [graphlib].
 It passes all of the standard libraries tests and is a drop in replacement.
 This also happens to be Python 3.7 compatible, so it can be used as a backport.
 Since usage is exactly the same as the standard libraries, please refer to their documentation for usage details.
+
+See this project on [GitHub](https://github.com/adriangb/graphlib2).
 
 ## Example
 
@@ -25,15 +29,39 @@ In other words: please vet the code yourself before using this.
 
 ## Differences with the stdlib implementation
 
-1. Additional APIs for removing nodes from the graph (`TopologicalSorter.remove_nodes`) and copying a prepared `TopologicalSorter` (`TopologicalSorter.copy`).
-1. A couple factors (~5x) faster for large highly branched graphs.
-1. Unlocks the GIL during certain operations, which can considerably speed up multithreaded workloads.
+1. Added `TopologicalSorter.copy()` which copies a prepared or unprepared graph so that it can be executed multiple times.
+1. Pretty solid performance improvements (see [benchmarks]).
+1. Returns generic iterables from `TopologicalSorter.get_ready()` and `TopologicalSorter.static_order()` instead of a tuple and generator respectively like the standard library does. Currently, these are both lists, but this should be considered an implementation detail.
 
-## Development
+## Performance
+
+The implementation was designed for the specific use case of adding all nodes, calling `prepare()` then copying and executing in a loop:
+
+```python
+from graphlib2 import TopologicalSorter
+
+graph = {0: [1], 1: [2]}
+ts = TopologicalSorter(graph)
+ts.prepare()
+while True:  # hot loop
+    while ts.is_active():
+        ready_nodes = ts.get_ready()
+        ts.done(*ready_nodes)
+```
+
+This means that the focus is on the performance of `TopologicalSorter.get_ready()` and `TopologicalSorter.done()`, and only minimal effort was put into other methods (`prepare()`, `add()` and `get_static_order()`), although these are still quite performant.
+
+## Contributing
 
 1. Clone the repo.
 1. Run `make init`
 1. Run `make test`
+1. Make your changes
+1. Push and open a pull request
+1. Wait for CI to run.
+
+If your pull request gets approved and merged, it will automatically be relased to PyPi (every commit to `main` is released).
 
 [di]: https://github.com/adriangb/di
 [graphlib]: https://docs.python.org/3/library/graphlib.html
+[benchmarks]: https://github.com/adriangb/graphlib2/bench.ipynb

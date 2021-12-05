@@ -9,8 +9,7 @@ use pyo3::create_exception;
 use pyo3::exceptions;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
-use pyo3::types::PyTuple;
+use pyo3::types::{PyDict, PyTuple, PyType};
 use pyo3::{Py, PyAny, Python};
 
 mod hashedany;
@@ -151,7 +150,7 @@ impl PreparedState {
         self.n_finished < self.n_passed_out || !self.ready_nodes.is_empty()
     }
     fn static_order(&mut self) -> PyResult<Vec<Py<PyAny>>> {
-        let mut out = Vec::new();
+        let mut out = Vec::with_capacity(self.id2nodeinfo.len());
         let mut queue: VecDeque<_> = self.ready_nodes.drain(..).collect();
         loop {
             if queue.is_empty() {
@@ -161,8 +160,8 @@ impl PreparedState {
             self.mark_nodes_as_done(vec![node].into_iter(), Some(&mut queue))?;
             out.push(self.dag.id2node.get(node).unwrap().0.clone());
         }
-        self.n_passed_out += out.len() as usize;
-        self.n_finished += out.len() as usize;
+        self.n_passed_out += out.len();
+        self.n_finished += out.len();
         Ok(out)
     }
     fn mark_nodes_as_done(
@@ -231,7 +230,12 @@ struct TopologicalSorter {
 
 #[pymethods]
 impl TopologicalSorter {
+    #[classmethod]
+    fn __class_getitem__(_cls: &PyType, item: &PyAny) -> PyResult<String> {
+        Ok(format!("TopologicalSorter[{}]", item.getattr("__name__")?))
+    }
     // Add a new node to the graph
+    #[args(predecessors = "*")]
     fn add(&mut self, node: HashedAny, predecessors: Vec<HashedAny>) -> PyResult<()> {
         match &mut self.state {
             State::Unprepared(state) => state.add_node(node, predecessors),
@@ -320,6 +324,7 @@ impl TopologicalSorter {
     /// # Arguments
     ///
     /// * `nodes` - Python objects representing nodes in the graph
+    #[args(nodes = "*")]
     fn done(&mut self, nodes: &PyTuple) -> PyResult<()> {
         let state = match &mut self.state {
             State::Prepared(state) => state,
@@ -331,8 +336,6 @@ impl TopologicalSorter {
         };
         let mut node_ids = Vec::with_capacity(nodes.len());
         let mut node_id: usize;
-        // Run this loop before marking as done so that we avoid
-        // acquiring the GIL in a loop
         let mut hashed_node;
         for node in nodes {
             hashed_node = HashedAny::extract(node)?;

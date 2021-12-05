@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import itertools
 from typing import Any, Collection, Dict, Generator, Hashable, Iterable, Sequence, Set, TypeVar
 import sys

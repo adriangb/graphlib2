@@ -169,16 +169,12 @@ impl PreparedState {
         nodes: impl Iterator<Item = usize>,
         done_queue: Option<&mut VecDeque<usize>>,
     ) -> PyResult<()> {
-        // Check that this node is ready to be marked as done and mark it
-        // There is currently a remove and an insert here just to take ownership of the value
-        // so that we can reference it while modifying other values
-        // Maybe there's a better way?
         let mut nodeinfo;
         let q = match done_queue {
             Some(v) => v,
             None => &mut self.ready_nodes,
         };
-        let mut parent_info: &mut NodeInfo;
+        let mut parent_info;
         let parents = &self.dag.parents;
         let id2nodeinfo = &mut self.id2nodeinfo;
         for node in nodes {
@@ -254,7 +250,7 @@ impl TopologicalSorter {
             }
             State::Unprepared(state) => state,
         };
-        let mut ready_nodes = VecDeque::new();
+        let mut ready_nodes = VecDeque::with_capacity(state.node2id.len());
         if let Some(cycle) = state.find_cycle() {
             let maybe_items: PyResult<Vec<String>> = cycle
                 .iter()

@@ -137,14 +137,15 @@ struct PreparedState {
 }
 
 impl PreparedState {
-    fn get_ready(&mut self) -> Vec<Py<PyAny>> {
-        let mut ret: Vec<Py<PyAny>> = Vec::with_capacity(self.ready_nodes.len());
-        self.n_passed_out += self.ready_nodes.len();
+    fn get_ready<'py>(&mut self, py: Python<'py>) -> &'py PyTuple {
         let id2node = &self.dag.id2node;
-        for node in self.ready_nodes.drain(..) {
-            ret.push(id2node.get(node).unwrap().0.clone())
-        }
-        ret
+        self.n_passed_out += self.ready_nodes.len();
+        PyTuple::new(
+            py,
+            self.ready_nodes
+                .drain(..)
+                .map(|n| id2node.get(n).unwrap().0.as_ref(py)),
+        )
     }
     fn is_active(&self) -> bool {
         self.n_finished < self.n_passed_out || !self.ready_nodes.is_empty()
@@ -331,12 +332,11 @@ impl TopologicalSorter {
             }
         };
         let mut node_ids = Vec::with_capacity(nodes.len());
-        let mut node_id: usize;
         let mut hashed_node;
         for node in nodes {
             hashed_node = HashedAny::extract(node)?;
-            node_id = match state.dag.node2id.get(&hashed_node) {
-                Some(&v) => v,
+            match state.dag.node2id.get(&hashed_node) {
+                Some(&v) => node_ids.push(v),
                 None => {
                     return Err(PyValueError::new_err(format!(
                         "node {} was not added using add()",
@@ -344,7 +344,6 @@ impl TopologicalSorter {
                     )))
                 }
             };
-            node_ids.push(node_id);
         }
         state.mark_nodes_as_done(node_ids.into_iter(), None)
     }
@@ -357,7 +356,7 @@ impl TopologicalSorter {
         }
     }
     /// Returns all nodes with no dependencies
-    fn get_ready<'py>(&mut self) -> PyResult<Vec<Py<PyAny>>> {
+    fn get_ready<'py>(&mut self, py: Python<'py>) -> PyResult<&'py PyTuple> {
         let state = match &mut self.state {
             State::Prepared(state) => state,
             State::Unprepared(_) => {
@@ -366,7 +365,7 @@ impl TopologicalSorter {
                 ))
             }
         };
-        Ok(state.get_ready())
+        Ok(state.get_ready(py))
     }
     fn static_order(&mut self) -> PyResult<Vec<Py<PyAny>>> {
         self.prepare()?;

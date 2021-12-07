@@ -45,7 +45,7 @@ graph = {0: [1], 1: [2]}
 ts = TopologicalSorter(graph)
 ts.prepare()
 while True:  # hot loop
-    t = ya.copy()
+    t = ts.copy()
     while t.is_active():
         ready_nodes = t.get_ready()
         t.done(*ready_nodes)

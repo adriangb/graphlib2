@@ -45,9 +45,10 @@ graph = {0: [1], 1: [2]}
 ts = TopologicalSorter(graph)
 ts.prepare()
 while True:  # hot loop
-    while ts.is_active():
-        ready_nodes = ts.get_ready()
-        ts.done(*ready_nodes)
+    t = ya.copy()
+    while t.is_active():
+        ready_nodes = t.get_ready()
+        t.done(*ready_nodes)
 ```
 
 This means that the focus is on the performance of `TopologicalSorter.get_ready()` and `TopologicalSorter.done()`, and only minimal effort was put into other methods (`prepare()`, `add()` and `get_static_order()`), although these are still quite performant.

@@ -1,6 +1,6 @@
 [package]
 name = "graphlib2"
-version = "0.2.11"
+version = "0.2.12"
 edition = "2018"
 description = "Rust port of the Python stdlib graphlib modules"
 readme = "README.md"
@@ -13,9 +13,6 @@ crate-type = ["cdylib"]
 [dependencies.pyo3]
 version = "0.15.1"
 features = ["extension-module", "abi3-py37"]
-
-[dependencies.pyo3-build-config]
-version = "0.15.1"
 
 [dependencies]
 nohash-hasher = "0.2.0"

@@ -9,8 +9,8 @@ use pyo3::create_exception;
 use pyo3::exceptions;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyTuple, PyType};
-use pyo3::{Py, PyAny, Python};
+use pyo3::types::{PyTuple, PyType};
+use pyo3::{PyAny, Python};
 
 mod hashedany;
 use crate::hashedany::HashedAny;
@@ -150,31 +150,8 @@ impl PreparedState {
     fn is_active(&self) -> bool {
         self.n_finished < self.n_passed_out || !self.ready_nodes.is_empty()
     }
-    fn static_order(&mut self) -> PyResult<Vec<Py<PyAny>>> {
-        let mut out = Vec::with_capacity(self.id2nodeinfo.len());
-        let mut queue: VecDeque<_> = self.ready_nodes.drain(..).collect();
-        loop {
-            if queue.is_empty() {
-                break;
-            }
-            let node = queue.pop_front().unwrap();
-            self.mark_nodes_as_done(vec![node].into_iter(), Some(&mut queue))?;
-            out.push(self.dag.id2node.get(node).unwrap().0.clone());
-        }
-        self.n_passed_out += out.len();
-        self.n_finished += out.len();
-        Ok(out)
-    }
-    fn mark_nodes_as_done(
-        &mut self,
-        nodes: impl Iterator<Item = usize>,
-        done_queue: Option<&mut VecDeque<usize>>,
-    ) -> PyResult<()> {
+    fn mark_nodes_as_done(&mut self, nodes: impl Iterator<Item = usize>) -> PyResult<()> {
         let mut nodeinfo;
-        let q = match done_queue {
-            Some(v) => v,
-            None => &mut self.ready_nodes,
-        };
         let mut parent_info;
         let parents = &self.dag.parents;
         let id2nodeinfo = &mut self.id2nodeinfo;
@@ -205,7 +182,7 @@ impl PreparedState {
                 parent_info.npredecessors -= 1;
                 if parent_info.npredecessors == 0 {
                     parent_info.state = NodeState::Ready;
-                    q.push_back(parent);
+                    self.ready_nodes.push_back(parent);
                 }
             }
         }
@@ -219,7 +196,7 @@ enum State {
     Prepared(PreparedState),
 }
 
-#[pyclass(module = "graphlib2")]
+#[pyclass(module = "graphlib2", subclass)]
 #[derive(Clone)]
 struct TopologicalSorter {
     state: State,
@@ -228,11 +205,10 @@ struct TopologicalSorter {
 #[pymethods]
 impl TopologicalSorter {
     #[classmethod]
-    fn __class_getitem__(_cls: &PyType, item: &PyAny) -> PyResult<String> {
-        Ok(format!("TopologicalSorter[{}]", item.getattr("__name__")?))
+    fn __class_getitem__<'py>(_cls: &'py PyType, _item: &PyAny) -> &'py PyType {
+        _cls
     }
     // Add a new node to the graph
-    #[args(predecessors = "*")]
     fn add(&mut self, node: HashedAny, predecessors: Vec<HashedAny>) -> PyResult<()> {
         match &mut self.state {
             State::Unprepared(state) => state.add_node(node, predecessors),
@@ -284,27 +260,15 @@ impl TopologicalSorter {
         Ok(())
     }
     #[new]
-    fn new(graph: Option<&PyDict>) -> PyResult<Self> {
-        let mut state = UnpreparedState {
-            id2nodeinfo: Vec::new(),
-            id2node: Vec::new(),
-            node2id: HashMap::default(),
-            parents: Vec::new(),
-        };
-        if let Some(g) = graph {
-            for (node, v) in g.iter() {
-                let i = v.iter()?;
-                let mut children: Vec<HashedAny> = Vec::new();
-                for el in i {
-                    children.push(HashedAny::extract(el?)?);
-                }
-                state.add_node(node.extract()?, children)?;
-            }
+    fn new() -> Self {
+        TopologicalSorter {
+            state: State::Unprepared(UnpreparedState {
+                id2nodeinfo: Vec::new(),
+                id2node: Vec::new(),
+                node2id: HashMap::default(),
+                parents: Vec::new(),
+            }),
         }
-        let this = TopologicalSorter {
-            state: State::Unprepared(state),
-        };
-        Ok(this)
     }
     /// Returns string representation of the graph
     fn __str__(&self) -> PyResult<String> {
@@ -321,7 +285,6 @@ impl TopologicalSorter {
     /// # Arguments
     ///
     /// * `nodes` - Python objects representing nodes in the graph
-    #[args(nodes = "*")]
     fn done(&mut self, nodes: &PyTuple) -> PyResult<()> {
         let state = match &mut self.state {
             State::Prepared(state) => state,
@@ -345,7 +308,7 @@ impl TopologicalSorter {
                 }
             };
         }
-        state.mark_nodes_as_done(node_ids.into_iter(), None)
+        state.mark_nodes_as_done(node_ids.into_iter())
     }
     fn is_active(&self) -> PyResult<bool> {
         match &self.state {
@@ -366,14 +329,6 @@ impl TopologicalSorter {
             }
         };
         Ok(state.get_ready(py))
-    }
-    fn static_order(&mut self) -> PyResult<Vec<Py<PyAny>>> {
-        self.prepare()?;
-        match &mut self.state {
-            State::Prepared(state) => state.static_order(),
-            // This arm _should_ never match!
-            State::Unprepared(_) => panic!("Calling prepare() failed"),
-        }
     }
 }
 

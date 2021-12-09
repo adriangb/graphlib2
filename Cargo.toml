@@ -14,9 +14,6 @@ crate-type = ["cdylib"]
 version = "0.15.1"
 features = ["extension-module", "abi3-py37"]
 
-[dependencies.pyo3-build-config]
-version = "0.15.1"
-
 [dependencies]
 nohash-hasher = "0.2.0"
 

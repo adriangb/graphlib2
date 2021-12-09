@@ -20,7 +20,6 @@ version = "0.2.11"
 dependencies = [
  "nohash-hasher",
  "pyo3",
- "pyo3-build-config",
 ]
 
 [[package]]

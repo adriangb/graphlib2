@@ -229,15 +229,18 @@ impl TopologicalSorter {
         };
         let mut ready_nodes = VecDeque::with_capacity(state.node2id.len());
         if let Some(cycle) = state.find_cycle() {
-            let maybe_items: PyResult<Vec<String>> = cycle
-                .iter()
-                .map(|n| hashed_node_to_str(state.id2node.get(*n).unwrap()))
+            let nodes_in_cyle: Vec<HashedAny> = cycle
+                .into_iter()
+                .map(|n| state.id2node.get(n).unwrap().clone())
                 .collect();
-            let items = maybe_items?;
-            let items_str = items.join(", ");
+            let items_str: PyResult<Vec<String>> = nodes_in_cyle
+                .iter()
+                .map(|n| hashed_node_to_str(&n))
+                .collect();
+            let py_items: Vec<Py<PyAny>> = nodes_in_cyle.iter().map(|n| n.0.clone()).collect();
             return Err(CycleError::new_err((
-                format!("nodes are in a cycle [{}]", items_str),
-                items,
+                format!("Nodes are in a cycle [{}]", items_str?.join(" -> ")),
+                py_items,
             )));
         }
         for (node, nodeinfo) in state.id2nodeinfo.iter_mut().enumerate() {

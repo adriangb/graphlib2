@@ -31,9 +31,13 @@ def cycles_match(c1: Iterable[T], c2: Iterable[T]) -> bool:
     c2.pop()
     # now we should have exactly the same elements, but possibly not
     # in the same order
+    # check that they are the same objects
+    assert set(c1) == set(c2)
+    # and check that the order is correct
     s1 = " ".join([str(x) for x in c1])
     s2 = " ".join([str(x) for x in c2] * 2)
     return s1 in s2
+    
 
 
 def get_static_order_from_groups(ts: graphlib.TopologicalSorter[T]) -> Generator[Set[T], None, None]:

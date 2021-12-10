@@ -31,7 +31,6 @@ In other words: please vet the code yourself before using this.
 
 1. Added `TopologicalSorter.copy()` which copies a prepared or unprepared graph so that it can be executed multiple times.
 1. Pretty solid performance improvements (see [benchmarks]).
-1. Returns generic iterables from `TopologicalSorter.get_ready()` and `TopologicalSorter.static_order()` instead of a tuple and generator respectively like the standard library does. Currently, these are both lists, but this should be considered an implementation detail.
 1. Misc improvements, like working generics without postponed evaluateion (`ToplologicalSorter[int]` works at runtime).
 
 ## Performance

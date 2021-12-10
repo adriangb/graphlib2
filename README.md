@@ -65,4 +65,4 @@ If your pull request gets approved and merged, it will automatically be relased 
 
 [di]: https://github.com/adriangb/di
 [graphlib]: https://docs.python.org/3/library/graphlib.html
-[benchmarks]: https://github.com/adriangb/graphlib2/bench.ipynb
+[benchmarks]: https://github.com/adriangb/graphlib2/blob/main/bench.ipynb

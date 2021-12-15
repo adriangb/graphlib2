@@ -150,12 +150,12 @@ impl PreparedState {
     fn is_active(&self) -> bool {
         self.n_finished < self.n_passed_out || !self.ready_nodes.is_empty()
     }
-    fn mark_nodes_as_done(&mut self, nodes: impl Iterator<Item = usize>) -> PyResult<()> {
+    fn mark_nodes_as_done(&mut self, nodes: Vec<usize>) -> PyResult<()> {
         let mut nodeinfo;
         let mut parent_info;
         let parents = &self.dag.parents;
         let id2nodeinfo = &mut self.id2nodeinfo;
-        for node in nodes {
+        for node in nodes.into_iter() {
             nodeinfo = id2nodeinfo.get_mut(node).unwrap();
             match nodeinfo.state {
                 NodeState::Active => {
@@ -311,7 +311,7 @@ impl TopologicalSorter {
                 }
             };
         }
-        state.mark_nodes_as_done(node_ids.into_iter())
+        state.mark_nodes_as_done(node_ids)
     }
     fn is_active(&self) -> PyResult<bool> {
         match &self.state {

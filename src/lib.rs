@@ -196,7 +196,7 @@ enum State {
     Prepared(PreparedState),
 }
 
-#[pyclass(module = "graphlib2", subclass)]
+#[pyclass(module = "graphlib2")]
 #[derive(Clone)]
 struct TopologicalSorter {
     state: State,

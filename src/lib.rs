@@ -235,7 +235,7 @@ impl TopologicalSorter {
                 .collect();
             let items_str: PyResult<Vec<String>> = nodes_in_cyle
                 .iter()
-                .map(|n| hashed_node_to_str(&n))
+                .map(|n| hashed_node_to_str(n))
                 .collect();
             let py_items: Vec<Py<PyAny>> = nodes_in_cyle.iter().map(|n| n.0.clone()).collect();
             return Err(CycleError::new_err((

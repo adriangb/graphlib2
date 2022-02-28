@@ -75,9 +75,8 @@ jobs:
           CIBW_BEFORE_ALL_LINUX: "((apt-get update && apt-get install curl || true) && (curl --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable)) || apk add rust cargo"
           CIBW_TEST_SKIP: "*-macosx_arm64 *-macosx_universal2:arm64"
           CIBW_BUILD: ${{ matrix.cibw_build }}
-          # Win32 fails to build for reasons
-          # musllinux_i686 fails to build because it's using alpine 3.12 which has rust 1.44
-          CIBW_SKIP: "*-win32*,*-musllinux_i686"
+          # Skip 32 bit builds because (1) they're broken and (2) take forever in CI
+          CIBW_SKIP: "{*-win32*,*_i686}"
           CIBW_ENVIRONMENT_LINUX: 'PATH="$PATH:$HOME/.cargo/bin"'
           # Cross compile on MacOS and Linux
           CIBW_ARCHS_MACOS: "auto universal2 arm64"

@@ -70,6 +70,7 @@ jobs:
           target: ${{ matrix.target }}
           args: --release --out dist --no-sdist
       - name: Install built wheel
+        shell: bash
         run: |
           python -m pip install dist/${{ env.PACKAGE_NAME }}-*.whl --force-reinstall
           python -m pip install pytest

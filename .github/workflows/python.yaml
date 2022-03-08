@@ -1,8 +1,14 @@
-name: CI
+name: Test & Release
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   PACKAGE_NAME: graphlib2

@@ -30,7 +30,7 @@ jobs:
           args: --release --out dist
       - name: Install built wheel - x86_64
         run: |
-          pip install ${{ env.PACKAGE_NAME }} --no-index --find-links dist --force-reinstall
+          pip install dist/${{ env.PACKAGE_NAME }}-*.whl --force-reinstall
           pip install pytest
           pytest -v
       - name: Build wheels - universal2
@@ -39,7 +39,7 @@ jobs:
           args: --release --universal2 --out dist --no-sdist
       - name: Install built wheel - universal2
         run: |
-          pip install ${{ env.PACKAGE_NAME }} --no-index --find-links dist --force-reinstall
+          pip install dist/${{ env.PACKAGE_NAME }}-*.whl --force-reinstall
           pytest -v
       - name: Upload wheels
         uses: actions/upload-artifact@v2
@@ -71,9 +71,9 @@ jobs:
           args: --release --out dist --no-sdist
       - name: Install built wheel
         run: |
-          pip install ${{ env.PACKAGE_NAME }} --no-index --find-links dist --force-reinstall
-          pip install pytest
-          pytest -v
+          python -m pip install dist/${{ env.PACKAGE_NAME }}-*.whl --force-reinstall
+          python -m pip install pytest
+          python -m pytest -v
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
@@ -100,7 +100,7 @@ jobs:
       - name: Install built wheel
         if: matrix.target == 'x86_64'
         run: |
-          pip install ${{ env.PACKAGE_NAME }} --no-index --find-links dist --force-reinstall
+          pip install dist/${{ env.PACKAGE_NAME }}-*.whl --force-reinstall
           pip install pytest
           pytest -v
       - name: Upload wheels
@@ -175,7 +175,7 @@ jobs:
             apk add py3-pip
             pip3 install -U pip pytest
             pip3 install ${{ env.PACKAGE_NAME }} --no-index --find-links /io/dist/ --force-reinstall
-            cd tests && python3 -m pytest
+            python3 -m pytest
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:
@@ -213,7 +213,7 @@ jobs:
             pip3 install -U pip pytest
           run: |
             pip3 install ${{ env.PACKAGE_NAME }} --no-index --find-links dist/ --force-reinstall
-            cd tests && python3 -m pytest
+            python3 -m pytest
       - name: Upload wheels
         uses: actions/upload-artifact@v2
         with:

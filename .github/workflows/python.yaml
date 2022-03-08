@@ -6,7 +6,7 @@ on:
 
 env:
   PACKAGE_NAME: graphlib2
-  PYTHON_VERSION: "3.7"  # to build abi3 wheels
+  PYTHON_VERSION: "3.7" # to build abi3 wheels
 
 jobs:
   macos:
@@ -86,28 +86,28 @@ jobs:
       matrix:
         target: [x86_64, i686]
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-        architecture: x64
-    - name: Build wheels
-      uses: messense/maturin-action@v1
-      with:
-        target: ${{ matrix.target }}
-        manylinux: auto
-        args: --release --out dist --no-sdist
-    - name: Install built wheel
-      if: matrix.target == 'x86_64'
-      run: |
-        pip install ${{ env.PACKAGE_NAME }} --no-index --find-links dist --force-reinstall
-        pip install pytest
-        pytest -v
-    - name: Upload wheels
-      uses: actions/upload-artifact@v2
-      with:
-        name: wheels
-        path: dist
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: x64
+      - name: Build wheels
+        uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: auto
+          args: --release --out dist --no-sdist
+      - name: Install built wheel
+        if: matrix.target == 'x86_64'
+        run: |
+          pip install ${{ env.PACKAGE_NAME }} --no-index --find-links dist --force-reinstall
+          pip install pytest
+          pytest -v
+      - name: Upload wheels
+        uses: actions/upload-artifact@v2
+        with:
+          name: wheels
+          path: dist
 
   linux-cross:
     runs-on: ubuntu-latest
@@ -115,36 +115,36 @@ jobs:
       matrix:
         target: [aarch64, armv7, s390x, ppc64le, ppc64]
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    - name: Build wheels
-      uses: messense/maturin-action@v1
-      with:
-        target: ${{ matrix.target }}
-        manylinux: auto
-        args: --release --out dist --no-sdist
-    - uses: uraimo/run-on-arch-action@v2.0.5
-      if: matrix.target != 'ppc64'
-      name: Install built wheel
-      with:
-        arch: ${{ matrix.target }}
-        distro: ubuntu20.04
-        githubToken: ${{ github.token }}
-        install: |
-          apt-get update
-          apt-get install -y --no-install-recommends python3 python3-pip
-          pip3 install -U pip
-        run: |
-          pip3 install ${{ env.PACKAGE_NAME }} --no-index --find-links dist/ --force-reinstall
-          pip3 install pytest
-          pytest -v
-    - name: Upload wheels
-      uses: actions/upload-artifact@v2
-      with:
-        name: wheels
-        path: dist
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build wheels
+        uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: auto
+          args: --release --out dist --no-sdist
+      - uses: uraimo/run-on-arch-action@v2.0.5
+        if: matrix.target != 'ppc64'
+        name: Install built wheel
+        with:
+          arch: ${{ matrix.target }}
+          distro: ubuntu20.04
+          githubToken: ${{ github.token }}
+          install: |
+            apt-get update
+            apt-get install -y --no-install-recommends python3 python3-pip
+            pip3 install -U pip
+          run: |
+            pip3 install ${{ env.PACKAGE_NAME }} --no-index --find-links dist/ --force-reinstall
+            pip3 install pytest
+            pytest -v
+      - name: Upload wheels
+        uses: actions/upload-artifact@v2
+        with:
+          name: wheels
+          path: dist
 
   musllinux:
     runs-on: ubuntu-latest
@@ -154,33 +154,33 @@ jobs:
           - x86_64-unknown-linux-musl
           - i686-unknown-linux-musl
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-        architecture: x64
-    - name: Build wheels
-      uses: messense/maturin-action@v1
-      with:
-        target: ${{ matrix.target }}
-        manylinux: musllinux_1_2
-        args: --release --out dist --no-sdist
-    - name: Install built wheel
-      if: matrix.target == 'x86_64-unknown-linux-musl'
-      uses: addnab/docker-run-action@v3
-      with:
-        image: alpine:latest
-        options: -v ${{ github.workspace }}:/io -w /io
-        run: |
-          apk add py3-pip
-          pip3 install -U pip pytest
-          pip3 install ${{ env.PACKAGE_NAME }} --no-index --find-links /io/dist/ --force-reinstall
-          cd tests && python3 -m pytest
-    - name: Upload wheels
-      uses: actions/upload-artifact@v2
-      with:
-        name: wheels
-        path: dist
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: x64
+      - name: Build wheels
+        uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: musllinux_1_2
+          args: --release --out dist --no-sdist
+      - name: Install built wheel
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        uses: addnab/docker-run-action@v3
+        with:
+          image: alpine:latest
+          options: -v ${{ github.workspace }}:/io -w /io
+          run: |
+            apk add py3-pip
+            pip3 install -U pip pytest
+            pip3 install ${{ env.PACKAGE_NAME }} --no-index --find-links /io/dist/ --force-reinstall
+            cd tests && python3 -m pytest
+      - name: Upload wheels
+        uses: actions/upload-artifact@v2
+        with:
+          name: wheels
+          path: dist
 
   musllinux-cross:
     runs-on: ubuntu-latest
@@ -192,38 +192,38 @@ jobs:
           - target: armv7-unknown-linux-musleabihf
             arch: armv7
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    - name: Build wheels
-      uses: messense/maturin-action@v1
-      with:
-        target: ${{ matrix.platform.target }}
-        manylinux: musllinux_1_2
-        args: --release --out dist --no-sdist
-    - uses: uraimo/run-on-arch-action@master
-      name: Install built wheel
-      with:
-        arch: ${{ matrix.platform.arch }}
-        distro: alpine_latest
-        githubToken: ${{ github.token }}
-        install: |
-          apk add py3-pip
-          pip3 install -U pip pytest
-        run: |
-          pip3 install ${{ env.PACKAGE_NAME }} --no-index --find-links dist/ --force-reinstall
-          cd tests && python3 -m pytest
-    - name: Upload wheels
-      uses: actions/upload-artifact@v2
-      with:
-        name: wheels
-        path: dist
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Build wheels
+        uses: messense/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          manylinux: musllinux_1_2
+          args: --release --out dist --no-sdist
+      - uses: uraimo/run-on-arch-action@master
+        name: Install built wheel
+        with:
+          arch: ${{ matrix.platform.arch }}
+          distro: alpine_latest
+          githubToken: ${{ github.token }}
+          install: |
+            apk add py3-pip
+            pip3 install -U pip pytest
+          run: |
+            pip3 install ${{ env.PACKAGE_NAME }} --no-index --find-links dist/ --force-reinstall
+            cd tests && python3 -m pytest
+      - name: Upload wheels
+        uses: actions/upload-artifact@v2
+        with:
+          name: wheels
+          path: dist
 
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: [ macos, windows, linux, linux-cross, musllinux, musllinux-cross ]
+    needs: [macos, windows, linux, linux-cross, musllinux, musllinux-cross]
     if: ${{ github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/download-artifact@v2

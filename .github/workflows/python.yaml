@@ -94,6 +94,8 @@ jobs:
     strategy:
       matrix:
         target: [x64, x86]
+        python-version: []
+        wheel-glob: []
         include:
           - python-version: "3.7"
             wheel-glob: "abi3"

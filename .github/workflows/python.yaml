@@ -94,17 +94,20 @@ jobs:
     strategy:
       matrix:
         target: [x64, x86]
-        python-version: []
-        wheel-glob: []
+        python-version: ["3.7", "pypy-3.7", "pypy-3.8", "pypy-3.9"]
         include:
           - python-version: "3.7"
             wheel-glob: "abi3"
+            interpreter: "python3.7"
           - python-version: "pypy-3.7"
             wheel-glob: "pp37"
+            interpreter: "pypy3.7"
           - python-version: "pypy-3.8"
             wheel-glob: "pp38"
+            interpreter: "pypy3.8"
           - python-version: "pypy-3.9"
             wheel-glob: "pp39"
+            interpreter: "pypy3.9"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -121,7 +124,7 @@ jobs:
         uses: messense/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --no-sdist
+          args: --release --out dist --no-sdist --interpreter ${{ matrix.interpreter }}
       - name: Install built wheel
         shell: bash
         run: |

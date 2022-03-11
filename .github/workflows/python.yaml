@@ -20,9 +20,13 @@ jobs:
       matrix:
         include:
           - python-version: "3.7"
-            wheel-glob: "cp37"
+            wheel-glob: "abi3"
           - python-version: "pypy-3.7"
             wheel-glob: "pp37"
+          - python-version: "pypy-3.8"
+            wheel-glob: "pp38"
+          - python-version: "pypy-3.9"
+            wheel-glob: "pp39"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -45,6 +49,31 @@ jobs:
           pip install dist/${{ env.PACKAGE_NAME }}-*-${{ matrix.wheel-glob }}-*.whl --force-reinstall
           pip install pytest
           pytest -v
+      - name: Upload wheels
+        uses: actions/upload-artifact@v2
+        with:
+          name: wheels
+          path: dist
+  
+  macos-universal:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - python-version: "3.7"
+            wheel-glob: "cp37"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: x64
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          default: true
       - name: Build wheels - universal2
         uses: messense/maturin-action@v1
         with:

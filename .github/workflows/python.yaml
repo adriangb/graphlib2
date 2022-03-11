@@ -98,7 +98,7 @@ jobs:
         include:
           - python-version: "3.7"
             wheel-glob: "abi3"
-            interpreter: "python3.7"
+            interpreter: "python3"
           - python-version: "pypy-3.7"
             wheel-glob: "pp37"
             interpreter: "pypy3.7"

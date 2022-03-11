@@ -18,7 +18,11 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        python-version: ["3.7", "pypy-3.7", "pypy-3.8", "pypy-3.9"]
+        include:
+          - python-version: "3.7"
+            wheel-glob: "cp37"
+          - python-version: "pypy-3.7"
+            wheel-glob: "pp37"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -38,7 +42,7 @@ jobs:
           args: --release --out dist
       - name: Install built wheel - x86_64
         run: |
-          pip install dist/${{ env.PACKAGE_NAME }}-*.whl --force-reinstall
+          pip install dist/${{ env.PACKAGE_NAME }}-*-${{ matrix.python-version }}-*.whl --force-reinstall
           pip install pytest
           pytest -v
       - name: Build wheels - universal2
@@ -60,7 +64,7 @@ jobs:
     strategy:
       matrix:
         target: [x64, x86]
-        python-version: ["3.7", "pypy-3.7", "pypy-3.8", "pypy-3.9"]
+        python-version: ["3.7"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -95,7 +99,7 @@ jobs:
     strategy:
       matrix:
         target: [x86_64, i686]
-        python-version: ["3.7", "pypy-3.7", "pypy-3.8", "pypy-3.9"]
+        python-version: ["3.7"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -125,7 +129,7 @@ jobs:
     strategy:
       matrix:
         target: [aarch64, armv7, s390x, ppc64le, ppc64]
-        python-version: ["3.7", "pypy-3.7", "pypy-3.8", "pypy-3.9"]
+        python-version: ["3.7"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -163,7 +167,7 @@ jobs:
     strategy:
       matrix:
         target: [x86_64-unknown-linux-musl, i686-unknown-linux-musl]
-        python-version: ["3.7", "pypy-3.7", "pypy-3.8", "pypy-3.9"]
+        python-version: ["3.7"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -202,7 +206,7 @@ jobs:
             arch: aarch64
           - target: armv7-unknown-linux-musleabihf
             arch: armv7
-        python-version: ["3.7", "pypy-3.7", "pypy-3.8", "pypy-3.9"]
+        python-version: ["3.7"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2

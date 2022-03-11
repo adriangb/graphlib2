@@ -94,7 +94,6 @@ jobs:
     strategy:
       matrix:
         target: [x64, x86]
-        python-version: ["3.7", "pypy-3.7", "pypy-3.8", "pypy-3.9"]
         include:
           - python-version: "3.7"
             wheel-glob: "abi3"

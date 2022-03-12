@@ -12,26 +12,16 @@ concurrency:
 
 env:
   PACKAGE_NAME: graphlib2
+  PYTHON_VERSION: "3.7" # to build abi3 wheels
 
 jobs:
   macos:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        include:
-          - python-version: "3.7"
-            wheel-glob: "abi3"
-          - python-version: "pypy-3.7"
-            wheel-glob: "pp37"
-          - python-version: "pypy-3.8"
-            wheel-glob: "pp38"
-          - python-version: "pypy-3.9"
-            wheel-glob: "pp39"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
           architecture: x64
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
@@ -43,45 +33,19 @@ jobs:
         uses: messense/maturin-action@v1
         with:
           target: x86_64
-          args: --release --out dist --interpreter python
+          args: --release --out dist
       - name: Install built wheel - x86_64
         run: |
-          pip install dist/${{ env.PACKAGE_NAME }}-*-${{ matrix.wheel-glob }}-*.whl --force-reinstall
+          pip install dist/${{ env.PACKAGE_NAME }}-*.whl --force-reinstall
           pip install pytest
           pytest -v
-      - name: Upload wheels
-        uses: actions/upload-artifact@v2
-        with:
-          name: wheels
-          path: dist
-  
-  macos-universal:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        include:
-          - python-version: "3.7"
-            wheel-glob: "cp37"
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
-          architecture: x64
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          default: true
       - name: Build wheels - universal2
         uses: messense/maturin-action@v1
         with:
-          args: --release --universal2 --out dist --no-sdist --interpreter python
+          args: --release --universal2 --out dist --no-sdist
       - name: Install built wheel - universal2
         run: |
           pip install dist/${{ env.PACKAGE_NAME }}-*universal2.whl --force-reinstall
-          pip install pytest
           pytest -v
       - name: Upload wheels
         uses: actions/upload-artifact@v2
@@ -94,19 +58,12 @@ jobs:
     strategy:
       matrix:
         target: [x64, x86]
-        python-version: ["3.7"]
-        include:
-          - python-version: "3.7"
-            wheel-glob: "abi3"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
           architecture: ${{ matrix.target }}
-      - name: Record Python version
-        shell: bash
-        run: echo "$(where python)"
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -117,11 +74,11 @@ jobs:
         uses: messense/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --no-sdist --interpreter python
+          args: --release --out dist --no-sdist
       - name: Install built wheel
         shell: bash
         run: |
-          pip install dist/${{ env.PACKAGE_NAME }}-*-${{ matrix.wheel-glob }}-*.whl --force-reinstall
+          python -m pip install dist/${{ env.PACKAGE_NAME }}-*.whl --force-reinstall
           python -m pip install pytest
           python -m pytest -v
       - name: Upload wheels
@@ -135,22 +92,24 @@ jobs:
     strategy:
       matrix:
         target: [x86_64, i686]
-        python-version: ["3.7", "pypy-3.7", "pypy-3.8", "pypy-3.9"]
+        python-version: ["3.7", "pypy-3.7"]
         include:
           - python-version: "3.7"
-            wheel-glob: "abi3"
+            wheel-glob: "cp37"
           - python-version: "pypy-3.7"
             wheel-glob: "pp37"
-          - python-version: "pypy-3.8"
-            wheel-glob: "pp38"
-          - python-version: "pypy-3.9"
-            wheel-glob: "pp39"
+            target: "x86_64"
+            python-arch: "x64"
+          - python-version: "pypy-3.7"
+            wheel-glob: "pp37"
+            target: "i686"
+            python-arch: "x86"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: ${{ matrix.python-version }}
-          architecture: x64
+          python-version: ${{ env.PYTHON_VERSION }}
+          architecture: ${{ matrix.python-arch }}
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:
@@ -160,26 +119,20 @@ jobs:
       - name: Install built wheel
         if: matrix.target == 'x86_64'
         run: |
-          pip install dist/${{ env.PACKAGE_NAME }}-*-${{ matrix.wheel-glob }}-*.whl --force-reinstall
+          pip install dist/${{ env.PACKAGE_NAME }}*${{ matrix.wheel-glob }}*.whl --force-reinstall
           pip install pytest
           pytest -v
-      - name: Upload wheels
-        uses: actions/upload-artifact@v2
-        with:
-          name: wheels
-          path: dist
 
   linux-cross:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         target: [aarch64, armv7, s390x, ppc64le, ppc64]
-        python-version: ["3.7"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:
@@ -211,13 +164,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [x86_64-unknown-linux-musl, i686-unknown-linux-musl]
-        python-version: ["3.7"]
+        target:
+          - x86_64-unknown-linux-musl
+          - i686-unknown-linux-musl
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
           architecture: x64
       - name: Build wheels
         uses: messense/maturin-action@v1
@@ -251,12 +205,11 @@ jobs:
             arch: aarch64
           - target: armv7-unknown-linux-musleabihf
             arch: armv7
-        python-version: ["3.7"]
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.PYTHON_VERSION }}
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:

@@ -99,17 +99,14 @@ jobs:
           - python-version: "pypy-3.7"
             wheel-glob: "pp37"
             target: "x86_64"
-            python-arch: "x64"
           - python-version: "pypy-3.7"
             wheel-glob: "pp37"
             target: "i686"
-            python-arch: "x86"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          architecture: ${{ matrix.python-arch }}
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:

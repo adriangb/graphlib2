@@ -94,25 +94,19 @@ jobs:
     strategy:
       matrix:
         target: [x64, x86]
-        python-version: ["3.7", "pypy-3.7", "pypy-3.8", "pypy-3.9"]
+        python-version: ["3.7"]
         include:
           - python-version: "3.7"
             wheel-glob: "abi3"
-          - python-version: "pypy-3.7"
-            wheel-glob: "pp37"
-          - python-version: "pypy-3.8"
-            wheel-glob: "pp38"
-          - python-version: "pypy-3.9"
-            wheel-glob: "pp39"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.target }}
-      - name: Record Python verision
+      - name: Record Python version
         shell: bash
-        run: echo "$(which python)"
+        run: echo "$(where python)"
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -141,7 +135,16 @@ jobs:
     strategy:
       matrix:
         target: [x86_64, i686]
-        python-version: ["3.7"]
+        python-version: ["3.7", "pypy-3.7", "pypy-3.8", "pypy-3.9"]
+        include:
+          - python-version: "3.7"
+            wheel-glob: "abi3"
+          - python-version: "pypy-3.7"
+            wheel-glob: "pp37"
+          - python-version: "pypy-3.8"
+            wheel-glob: "pp38"
+          - python-version: "pypy-3.9"
+            wheel-glob: "pp39"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -153,11 +156,11 @@ jobs:
         with:
           target: ${{ matrix.target }}
           manylinux: auto
-          args: --release --out dist --no-sdist
+          args: --release --out dist --no-sdist --interpreter python
       - name: Install built wheel
         if: matrix.target == 'x86_64'
         run: |
-          pip install dist/${{ env.PACKAGE_NAME }}-*.whl --force-reinstall
+          pip install dist/${{ env.PACKAGE_NAME }}-*-${{ matrix.wheel-glob }}-*.whl --force-reinstall
           pip install pytest
           pytest -v
       - name: Upload wheels

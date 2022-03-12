@@ -110,6 +110,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           architecture: ${{ matrix.target }}
+      - name: Record Python verision
+        shell: bash
+        run: echo "$(which python)"
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:

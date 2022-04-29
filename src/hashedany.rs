@@ -26,7 +26,7 @@ impl hash::Hash for HashedAny {
 impl cmp::PartialEq for HashedAny {
     fn eq(&self, other: &Self) -> bool {
         // This assumes that `self is other` implies `self == other`
-        // Which is not necesarily true, e.g. for NaN, but is true in most cases
+        // Which is not necessarily true, e.g. for NaN, but is true in most cases
         // and there's a perf advantage to not calling into Python
         if self.0.is(&other.0) {
             return true;

@@ -13,7 +13,7 @@ class TopologicalSorter(Generic[T]):
     __slots__ = ("_ts",)
 
     def __init__(self, graph: Optional[SupportsItems[T, Iterable[T]]] = None) -> None:
-        self._ts: _TopologicalSorter[T] = _TopologicalSorter()
+        self._ts: "_TopologicalSorter[T]" = _TopologicalSorter()
         if graph:
             for node, children in graph.items():
                 self._ts.add(node, tuple(children))

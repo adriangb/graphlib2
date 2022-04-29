@@ -9,7 +9,7 @@ use pyo3::create_exception;
 use pyo3::exceptions;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::{PyTuple, PyType};
+use pyo3::types::PyTuple;
 use pyo3::{PyAny, Python};
 
 mod hashedany;
@@ -204,10 +204,6 @@ struct TopologicalSorter {
 
 #[pymethods]
 impl TopologicalSorter {
-    #[classmethod]
-    fn __class_getitem__<'py>(_cls: &'py PyType, _item: &PyAny) -> &'py PyType {
-        _cls
-    }
     // Add a new node to the graph
     fn add(&mut self, node: HashedAny, predecessors: Vec<HashedAny>) -> PyResult<()> {
         match &mut self.state {
@@ -284,7 +280,7 @@ impl TopologicalSorter {
     fn copy(&self) -> TopologicalSorter {
         self.clone()
     }
-    /// Mark nodes as done and possibly free up their dependants
+    /// Mark nodes as done and possibly free up their dependents
     /// # Arguments
     ///
     /// * `nodes` - Python objects representing nodes in the graph

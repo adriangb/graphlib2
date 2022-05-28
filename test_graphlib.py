@@ -1,14 +1,13 @@
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import itertools
-from typing import Any, Collection, Dict, Generator, Hashable, Iterable, List, Mapping, Sequence, Set, TypeVar
+import json
+from typing import Any, Collection, Dict, Generator, Hashable, Iterable, Mapping, Sequence, Set, TypeVar
 import sys
 if sys.version_info < (3, 8):
     from typing_extensions import Protocol
 else:
     from typing import Protocol
 
-import igraph
 import graphlib2 as graphlib
 import pytest
 
@@ -330,11 +329,8 @@ def test_execute_after_copy():
 
 
 def large_branched_dag(n: int) -> Mapping[int, Iterable[int]]:
-    g = igraph.Graph.Tree_Game(n, directed=True)
-    res: Dict[int, List[int]] = defaultdict(list)
-    for source, dest in g.get_edgelist():
-        res[source].append(dest)
-    return res
+    with open("large_branched_graph.json") as f:
+        return json.loads(f.read())
 
 
 def test_thread_safety() -> None:

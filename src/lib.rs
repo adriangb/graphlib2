@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::fmt;
-use std::sync::Arc;
 
 use nohash_hasher::BuildNoHashHasher;
 use pyo3::create_exception;
@@ -119,6 +118,7 @@ impl UnpreparedState {
     }
 }
 
+#[derive(Clone)]
 struct SolvedDAG {
     // "Immutable" fields that can be shared
     id2node: Vec<HashedAny>,
@@ -128,7 +128,7 @@ struct SolvedDAG {
 
 #[derive(Clone)]
 struct PreparedState {
-    dag: Arc<SolvedDAG>,
+    dag: SolvedDAG,
     // "Mutable" fields that need to be copied
     ready_nodes: VecDeque<usize>,
     id2nodeinfo: Vec<NodeInfo>,
@@ -246,11 +246,11 @@ impl TopologicalSorter {
             }
         }
         self.state = State::Prepared(PreparedState {
-            dag: Arc::new(SolvedDAG {
+            dag: SolvedDAG {
                 id2node: state.id2node.clone(),
                 node2id: state.node2id.clone(),
                 parents: state.parents.clone(),
-            }),
+            },
             ready_nodes,
             id2nodeinfo: state.id2nodeinfo.clone(),
             n_passed_out: 0,

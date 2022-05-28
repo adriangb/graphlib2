@@ -1,13 +1,14 @@
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import itertools
-from threading import Thread
-from typing import Any, Collection, Dict, Generator, Hashable, Iterable, List, Sequence, Set, TypeVar
+from typing import Any, Collection, Dict, Generator, Hashable, Iterable, List, Mapping, Sequence, Set, TypeVar
 import sys
 if sys.version_info < (3, 8):
     from typing_extensions import Protocol
 else:
     from typing import Protocol
 
+import igraph
 import graphlib2 as graphlib
 import pytest
 
@@ -328,9 +329,16 @@ def test_execute_after_copy():
     assert not ts3.is_active()
 
 
+def large_branched_dag(n: int) -> Mapping[int, Iterable[int]]:
+    g = igraph.Graph.Tree_Game(n, directed=True)
+    res: Dict[int, List[int]] = defaultdict(list)
+    for source, dest in g.get_edgelist():
+        res[source].append(dest)
+    return res
+
+
 def test_thread_safety() -> None:
-    dag = {i: [i-1] for i in range(1, 10_000)}
-    dag[0] = []
+    dag = large_branched_dag(10_000)
     ts = graphlib.TopologicalSorter(dag)
 
     def run(ts: graphlib.TopologicalSorter[int]) -> None:

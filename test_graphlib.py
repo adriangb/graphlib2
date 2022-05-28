@@ -329,7 +329,7 @@ def test_execute_after_copy():
 
 
 def large_branched_dag(n: int) -> Mapping[int, Iterable[int]]:
-    with open("large_branched_graph.json") as f:
+    with open("large_branched_dag.json") as f:
         return json.loads(f.read())
 
 

@@ -15,6 +15,7 @@
 !/README.md
 !/.github
 !/LICENSE.txt
+!/large_branched_dag.json
 
 __pycache__
 *.so

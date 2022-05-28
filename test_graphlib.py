@@ -348,11 +348,12 @@ def test_thread_safety() -> None:
     n_threads = 64
     with ThreadPoolExecutor(n_threads) as exec:
         exec.submit(ts.prepare).result()
-        futures = (
+        futures = [
             exec.submit(run, ts)
             for _ in range(n_threads)
-        )
-        list(as_completed(futures))
+        ]
+        for fut in as_completed(futures):
+            fut.result()
 
     assert not ts.is_active()
 

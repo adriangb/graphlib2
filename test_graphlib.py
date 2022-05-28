@@ -1,5 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import itertools
-from typing import Any, Collection, Dict, Generator, Hashable, Iterable, Sequence, Set, TypeVar
+from threading import Thread
+from typing import Any, Collection, Dict, Generator, Hashable, Iterable, List, Sequence, Set, TypeVar
 import sys
 if sys.version_info < (3, 8):
     from typing_extensions import Protocol
@@ -11,7 +13,7 @@ import pytest
 
 
 class Node(Hashable, Protocol):
-    """Nodes need comparable to be sorted for determinsm in tests"""
+    """Nodes need comparable to be sorted for determinism in tests"""
     def __lt__(self, __other: Any) -> bool: ...
     def __hash__(self) -> int: ...
     def __eq__(self, o: object) -> bool: ...
@@ -307,15 +309,44 @@ def test_order_of_insertion_does_not_matter_between_groups():
 
 
 def test_execute_after_copy():
-    graph = {0: [1]}
+    graph = {0: [], 1: [0]}
     ts = graphlib.TopologicalSorter(graph)
     ts2 = ts.copy()
 
-    assert list(ts.static_order()) == [1, 0]
+    ts.prepare()
+    assert list(ts.get_ready()) == [0]
+    ts.done(0)
+    ts3 = ts.copy()
+    assert list(ts.get_ready()) == [1]
+    ts.done(1)
     assert not ts.is_active()
 
-    assert list(ts2.static_order()) == [1, 0]
-    assert not ts2.is_active()
+    assert list(ts2.static_order()) == [0, 1]
+
+    assert list(ts3.get_ready()) == [1]
+    ts3.done(1)
+    assert not ts3.is_active()
+
+
+def test_thread_safety() -> None:
+    dag = {i: [i-1] for i in range(1, 10_000)}
+    dag[0] = []
+    ts = graphlib.TopologicalSorter(dag)
+
+    def run(ts: graphlib.TopologicalSorter[int]) -> None:
+        while ts.is_active():
+            ts.done(*ts.get_ready())
+
+    n_threads = 64
+    with ThreadPoolExecutor(n_threads) as exec:
+        exec.submit(ts.prepare).result()
+        futures = (
+            exec.submit(run, ts)
+            for _ in range(n_threads)
+        )
+        list(as_completed(futures))
+
+    assert not ts.is_active()
 
 
 if __name__ == "__main__":

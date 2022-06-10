@@ -19,7 +19,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           architecture: x64
@@ -61,7 +61,7 @@ jobs:
         target: [x64, x86]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           architecture: ${{ matrix.target }}
@@ -95,7 +95,7 @@ jobs:
         target: [x86_64, i686]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           architecture: x64
@@ -124,7 +124,7 @@ jobs:
         target: [aarch64, armv7, s390x, ppc64le, ppc64]
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Build wheels
@@ -163,7 +163,7 @@ jobs:
           - i686-unknown-linux-musl
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           architecture: x64
@@ -201,7 +201,7 @@ jobs:
             arch: armv7
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Build wheels
@@ -233,20 +233,23 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        target: [x86_64]
+        target: [x86_64, aarch64]
         python-version:
           - '3.7'
           - '3.8'
           - '3.9'
+        exclude:
+          - os: macos-latest
+            target: aarch64
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
-          python-version: pypy-${{ matrix.python-version }}
+          python-version: pypy${{ matrix.python-version }}
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:
-          maturin-version: v0.13.0-beta.4
+          maturin-version: v0.13.0-beta.5
           target: ${{ matrix.target }}
           manylinux: auto
           args: --release --out dist -i pypy${{ matrix.python-version }}

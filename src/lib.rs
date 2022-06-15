@@ -332,7 +332,7 @@ impl TopologicalSorter {
 }
 
 #[pymodule]
-fn graphlib2(_py: Python, m: &PyModule) -> PyResult<()> {
+fn _graphlib2(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<TopologicalSorter>()?;
     m.add("CycleError", _py.get_type::<CycleError>())?;
     Ok(())

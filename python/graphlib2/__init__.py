@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Generic, Hashable, Iterable, Optional, TypeVar
 
+from graphlib2._graphlib2 import CycleError
+from graphlib2._graphlib2 import TopologicalSorter as _TopologicalSorter
 from graphlib2._types import SupportsItems
-from graphlib2.graphlib2 import CycleError
-from graphlib2.graphlib2 import TopologicalSorter as _TopologicalSorter
 
 T = TypeVar("T", bound=Hashable)
 

@@ -27,7 +27,7 @@ documentation = "https://github.com/adriangb/graphlib2/README.md"
 repository = "https://github.com/adriangb/graphlib2"
 
 [build-system]
-requires = ["maturin>=0.13.0b6<14"]
+requires = ["maturin>=0.13.0<14"]
 build-backend = "maturin"
 
 [tool.maturin]

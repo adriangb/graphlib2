@@ -31,7 +31,7 @@ In other words: please vet the code yourself before using this.
 
 1. Added `TopologicalSorter.copy()` which copies a prepared or unprepared graph so that it can be executed multiple times.
 1. Pretty solid performance improvements (see [benchmarks]).
-1. Misc improvements, like working generics without postponed evaluateion (`ToplologicalSorter[int]` works at runtime).
+1. Misc improvements, like working generics without postponed evaluation (`ToplologicalSorter[int]` works at runtime).
 
 ## Performance
 

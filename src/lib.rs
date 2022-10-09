@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::fmt;
 
-use nohash_hasher::BuildNoHashHasher;
 use pyo3::create_exception;
 use pyo3::exceptions;
 use pyo3::exceptions::PyValueError;
@@ -12,7 +10,7 @@ use pyo3::types::PyTuple;
 use pyo3::{PyAny, Python};
 
 mod hashedany;
-use crate::hashedany::HashedAny;
+use crate::hashedany::{HashedAny, HashedAnyMap};
 
 create_exception!(graphlib2, CycleError, exceptions::PyValueError);
 
@@ -33,7 +31,7 @@ struct NodeInfo {
 struct UnpreparedState {
     id2nodeinfo: Vec<NodeInfo>,
     id2node: Vec<HashedAny>,
-    node2id: HashMap<HashedAny, usize, BuildNoHashHasher<isize>>,
+    node2id: HashedAnyMap<usize>,
     parents: Vec<Vec<usize>>,
 }
 
@@ -122,7 +120,7 @@ impl UnpreparedState {
 struct SolvedDAG {
     // "Immutable" fields that can be shared
     id2node: Vec<HashedAny>,
-    node2id: HashMap<HashedAny, usize, BuildNoHashHasher<isize>>,
+    node2id: HashedAnyMap<usize>,
     parents: Vec<Vec<usize>>,
 }
 
@@ -130,7 +128,7 @@ struct SolvedDAG {
 struct PreparedState {
     dag: SolvedDAG,
     // "Mutable" fields that need to be copied
-    ready_nodes: VecDeque<usize>,
+    ready_nodes: Vec<usize>,
     id2nodeinfo: Vec<NodeInfo>,
     n_passed_out: usize,
     n_finished: usize,
@@ -144,7 +142,7 @@ impl PreparedState {
             py,
             self.ready_nodes
                 .drain(..)
-                .map(|n| id2node.get(n).unwrap().0.as_ref(py)),
+                .map(|n| id2node.get(n).unwrap().value.as_ref(py)),
         )
     }
     fn is_active(&self) -> bool {
@@ -155,7 +153,7 @@ impl PreparedState {
         let mut parent_info;
         let parents = &self.dag.parents;
         let id2nodeinfo = &mut self.id2nodeinfo;
-        for node in nodes.into_iter() {
+        for node in nodes {
             nodeinfo = id2nodeinfo.get_mut(node).unwrap();
             match nodeinfo.state {
                 NodeState::Active => {
@@ -182,7 +180,7 @@ impl PreparedState {
                 parent_info.npredecessors -= 1;
                 if parent_info.npredecessors == 0 {
                     parent_info.state = NodeState::Ready;
-                    self.ready_nodes.push_back(parent);
+                    self.ready_nodes.push(parent);
                 }
             }
         }
@@ -223,17 +221,15 @@ impl TopologicalSorter {
             }
             State::Unprepared(state) => state,
         };
-        let mut ready_nodes = VecDeque::with_capacity(state.node2id.len());
+        let mut ready_nodes = Vec::with_capacity(state.node2id.len());
         if let Some(cycle) = state.find_cycle() {
             let nodes_in_cyle: Vec<HashedAny> = cycle
                 .into_iter()
                 .map(|n| state.id2node.get(n).unwrap().clone())
                 .collect();
-            let items_str: PyResult<Vec<String>> = nodes_in_cyle
-                .iter()
-                .map(|n| hashed_node_to_str(n))
-                .collect();
-            let py_items: Vec<Py<PyAny>> = nodes_in_cyle.iter().map(|n| n.0.clone()).collect();
+            let items_str: PyResult<Vec<String>> =
+                nodes_in_cyle.iter().map(hashed_node_to_str).collect();
+            let py_items: Vec<Py<PyAny>> = nodes_in_cyle.iter().map(|n| n.value.clone()).collect();
             return Err(CycleError::new_err((
                 format!("Nodes are in a cycle [{}]", items_str?.join(" -> ")),
                 py_items,
@@ -241,7 +237,7 @@ impl TopologicalSorter {
         }
         for (node, nodeinfo) in state.id2nodeinfo.iter_mut().enumerate() {
             if nodeinfo.npredecessors == 0 {
-                ready_nodes.push_back(node);
+                ready_nodes.push(node);
                 nodeinfo.state = NodeState::Ready;
             }
         }
@@ -341,7 +337,7 @@ fn _graphlib2(_py: Python, m: &PyModule) -> PyResult<()> {
 // Misc helper methods
 fn hashed_node_to_str(node: &HashedAny) -> PyResult<String> {
     Python::with_gil(|py| -> PyResult<String> {
-        Ok(node.0.as_ref(py).repr()?.to_str()?.to_string())
+        Ok(node.value.as_ref(py).repr()?.to_str()?.to_string())
     })
 }
 

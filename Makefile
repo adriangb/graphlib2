@@ -15,9 +15,6 @@ init: .clean .init
 build-develop: .init
 	. ./venv/bin/activate && maturin develop --release --strip
 
-build-manylinux:
-	docker run --rm -v $$(pwd):/io konstin2/maturin build --release --manylinux 2014
-
 test: build-develop
 	./venv/bin/python test_graphlib.py
 

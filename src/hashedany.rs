@@ -9,17 +9,23 @@ use pyo3::prelude::*;
 // we wrap them in a struct that gets the hash() when it receives the object from Python
 // and then just echoes back that hash when called Rust needs to hash it
 #[derive(Clone)]
-pub struct HashedAny(pub Py<PyAny>, isize);
+pub struct HashedAny {
+    pub value: Py<PyAny>,
+    hash: isize,
+}
 
 impl<'source> FromPyObject<'source> for HashedAny {
     fn extract(ob: &'source PyAny) -> PyResult<Self> {
-        Ok(HashedAny(ob.into(), ob.hash()?))
+        Ok(HashedAny {
+            value: ob.into(),
+            hash: ob.hash()?,
+        })
     }
 }
 
 impl hash::Hash for HashedAny {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        state.write_isize(self.1)
+        state.write_isize(self.hash)
     }
 }
 
@@ -28,13 +34,13 @@ impl cmp::PartialEq for HashedAny {
         // This assumes that `self is other` implies `self == other`
         // Which is not necessarily true, e.g. for NaN, but is true in most cases
         // and there's a perf advantage to not calling into Python
-        if self.0.is(&other.0) {
+        if self.value.is(&other.value) {
             return true;
         }
         Python::with_gil(|py| -> bool {
-            self.0
+            self.value
                 .as_ref(py)
-                .rich_compare(other.0.as_ref(py), CompareOp::Eq)
+                .rich_compare(other.value.as_ref(py), CompareOp::Eq)
                 .unwrap()
                 .is_true()
                 .unwrap()
@@ -43,3 +49,30 @@ impl cmp::PartialEq for HashedAny {
 }
 
 impl cmp::Eq for HashedAny {}
+
+// Since we are only ever using isize values as keys
+// and these values are already being hashed in Python land
+// we don't need to re-hash them in Rust
+// The following is a Hasher implementation that does no hashing
+
+#[derive(Default, Clone, Copy)]
+pub struct NoHashHasher {
+    val: u64,
+}
+
+impl hash::Hasher for NoHashHasher {
+    fn write(&mut self, _: &[u8]) {
+        panic!("Invalid use of NoHashHasher")
+    }
+
+    fn write_isize(&mut self, n: isize) {
+        self.val = n as u64;
+    }
+
+    fn finish(&self) -> u64 {
+        self.val
+    }
+}
+
+pub type HashedAnyMap<V> =
+    std::collections::HashMap<HashedAny, V, std::hash::BuildHasherDefault<NoHashHasher>>;

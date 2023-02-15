@@ -33,6 +33,17 @@ build-backend = "maturin"
 [tool.maturin]
 sdist-include = ["Cargo.lock"]
 strip = true
+python-source = "python"
+profile = "release"
 
-[tool.isort]
-profile = "black"
+
+[tool.ruff]
+extend-select = [
+  "RUF100",  # dissallow unused # noqa comments
+  "I001", # isort
+]
+ignore = [
+  "E501", # leave line lengths up to black
+  "E402", # leave imports up to isort
+  "E731", # assigning lambdas is convenient
+]

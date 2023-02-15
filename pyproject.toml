@@ -27,12 +27,23 @@ documentation = "https://github.com/adriangb/graphlib2/README.md"
 repository = "https://github.com/adriangb/graphlib2"
 
 [build-system]
-requires = ["maturin>=0.13.0<14"]
+requires = ["maturin>=0.14.0,<0.15.0"]
 build-backend = "maturin"
 
 [tool.maturin]
 sdist-include = ["Cargo.lock"]
 strip = true
+python-source = "python"
+profile = "release"
 
-[tool.isort]
-profile = "black"
+
+[tool.ruff]
+extend-select = [
+  "RUF100",  # dissallow unused # noqa comments
+  "I001", # isort
+]
+ignore = [
+  "E501", # leave line lengths up to black
+  "E402", # leave imports up to isort
+  "E731", # assigning lambdas is convenient
+]

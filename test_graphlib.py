@@ -354,5 +354,24 @@ def test_thread_safety() -> None:
     assert not ts.is_active()
 
 
+def test_ready_ordered_by_number_of_upstream() -> None:
+    """Ready nodes should be passed out such that if
+    they are processed in order and done() is called on nodes individually
+    we optimize unblocking more tasks so that we can saturate the
+    threads / tasks / etc. that we have.
+    """
+    graphs = [
+        {0: [], 1: [], 2: [1], 3: [1]},
+        { 1: [], 0: [], 2: [1], 3: [1]},
+    ]
+    for graph in graphs:
+        ts: graphlib.TopologicalSorter[int] = graphlib.TopologicalSorter()
+        for node in graph:
+            ts.add(node, *graph[node])
+        ts.prepare()
+        assert list(ts.get_ready()) == [1, 0]
+
+
+
 if __name__ == "__main__":
     pytest.main([__file__,])

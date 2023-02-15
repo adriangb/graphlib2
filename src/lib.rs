@@ -138,6 +138,9 @@ impl PreparedState {
     fn get_ready<'py>(&mut self, py: Python<'py>) -> &'py PyTuple {
         let id2node = &self.dag.id2node;
         self.n_passed_out += self.ready_nodes.len();
+        // Pass out nodes ordered by most to least
+        self.ready_nodes
+            .sort_unstable_by_key(|node| -(self.dag.parents[*node].len() as i64));
         PyTuple::new(
             py,
             self.ready_nodes
